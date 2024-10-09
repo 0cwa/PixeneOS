@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "full": {
+    "location_ota": "https://github.com/pixincreate/PixeneOS/releases/download/2024092900/barbet-2024092900-rootless-4440d97.zip",
+    "location_csig": "https://github.com/pixincreate/PixeneOS/releases/download/2024092900/barbet-2024092900-rootless-4440d97.zip.csig"
+  }
+}
