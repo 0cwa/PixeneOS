@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "full": {
+    "location_ota": "https://github.com/pixincreate/PixeneOS/releases/download/2024101200/barbet-2024101200-rootless-fc2078c.zip",
+    "location_csig": "https://github.com/pixincreate/PixeneOS/releases/download/2024101200/barbet-2024101200-rootless-fc2078c.zip.csig"
+  }
+}
