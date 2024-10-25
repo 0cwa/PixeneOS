@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "full": {
+    "location_ota": "./barbet-2024101200-magisk-28001-fc2078c.zip",
+    "location_csig": "./barbet-2024101200-magisk-28001-fc2078c.zip.csig"
+  }
+}
