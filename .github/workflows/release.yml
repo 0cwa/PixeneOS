@@ -2,7 +2,7 @@ name: Patch and Release OTA
 
 on:
   schedule:
-    - cron: '0 */6 * * *' # Check for update every 6 hours (UTC). GrapheneOS checks every 6 hours.
+    - cron: "0 */6 * * *" # Check for update every 6 hours (UTC). GrapheneOS checks every 6 hours.
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -155,12 +155,12 @@ jobs:
           toolchain: stable 2 weeks ago
 
       - name: Build and Cache Rust Dependencies
-        uses: Swatinem/rust-cache@v2.7.5
+        uses: Swatinem/rust-cache@v2.7.7
 
       - name: Install Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12-dev'
+          python-version: "3.12-dev"
 
       - name: Setup Environment variables
         run: |

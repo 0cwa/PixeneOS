@@ -13,6 +13,7 @@ PixeneOS is a `shell` script designed to patch GrapheneOS OTA (Over The Air) ima
 - [OEMUnlockOnBoot](https://github.com/chenxiaolong/OEMUnlockOnBoot) (>= version 1.1)
 
 > [!NOTE]
+>
 > 1. This project is not affiliated with GrapheneOS or any of the mentioned projects. It is a personal project for personal use.
 > 2. Currently, the project only supports Linux due to compatibility issues with other operating systems (`libsepol` is highly Linux-specific).
 
@@ -27,10 +28,11 @@ To use this project, you need the following (most dependencies will be handled b
   - `avbroot`
   - `afsr`
   - `custota-tool`
+  - `Magisk` (optional)
 - Modules:
   - `BCR`
+  - `Charge Limit`
   - `Custota`
-  - `Magisk`
   - `MSD`
   - `OEMUnlockOnBoot`
 - Dependencies:
@@ -53,13 +55,23 @@ This repository acts as a server.
 
 Reading the [AVBRoot docs](https://github.com/chenxiaolong/AVBRoot) is essential before proceeding with PixeneOS.
 
-1. Ensure the device has an unpatched version of GrapheneOS installed. The version must match the one from PixeneOS.
+1. Ensure the device has an unpatched version of GrapheneOS installed. The version must match the one from PixeneOS. It is important to make sure that the version installed matches the version on PixeneOS
 2. Start with a version before the latest to ensure OTA functionality.
 
 > [!IMPORTANT]
-> `Factory image` and `OTA image` are different. This project deals with **OTA images**.
+> `Factory image` and `OTA image` are different. AVBRoot is meant to deal with **OTA images**. So does PixeneOS.
 
 ### Detailed Instructions
+
+#### Web Install
+
+It is easier to use the web installer to flash GrapheneOS. However, it is recommended to use the manual method since it makes it possible to install an older version of GrapheneOS unlike the web installer which always installs the latest version.
+
+- Use the [web installer](https://grapheneos.org/install/web) to install GrapheneOS
+- Once installed, **do not** re-lock the bootloader by clicking `Lock bootloader` under the `Locking the bootloader` section
+- Proceed to the [patching section](#patching-grapheneos-cooking-pixeneos)
+
+#### Manual Install
 
 1. Ensure Fastboot version is `34` or newer. `35` or above is recommended as older versions are known to have bugs that prevent commands like `fastboot flashall` from running.
 
@@ -80,7 +92,11 @@ Reading the [AVBRoot docs](https://github.com/chenxiaolong/AVBRoot) is essential
    ./flash-all.sh # or .bat on Windows
    ```
 
-4. Download the [OTA from the releases](https://github.com/pixincreate/PixeneOS/releases). Ensure the version matches the installed version.
+4. Proceed to the [patching section](#patching-grapheneos-cooking-pixeneos)
+
+#### Patching GrapheneOS (cooking PixeneOS)
+
+1. Download the [OTA from the releases](https://github.com/pixincreate/PixeneOS/releases). Ensure the version matches the installed version.
 
    Extract the partition images from the patched OTA that are different from the original.
 
@@ -93,7 +109,7 @@ Reading the [AVBRoot docs](https://github.com/chenxiaolong/AVBRoot) is essential
 
    To extract and flash all OS partitions, pass `--all`.
 
-5. Set the `ANDROID_PRODUCT_OUT` environment variable to the directory containing the extracted files.
+2. Set the `ANDROID_PRODUCT_OUT` environment variable to the directory containing the extracted files.
 
    For `sh`/`bash`/`zsh` (Linux, macOS, WSL):
 
@@ -113,7 +129,7 @@ Reading the [AVBRoot docs](https://github.com/chenxiaolong/AVBRoot) is essential
    set ANDROID_PRODUCT_OUT=extracted
    ```
 
-6. Flash the partition images.
+3. Flash the partition images.
 
    ```shell
    fastboot flashall --skip-reboot
@@ -123,7 +139,7 @@ Reading the [AVBRoot docs](https://github.com/chenxiaolong/AVBRoot) is essential
 
    Alternatively, for Pixel devices, running `flash-base.sh` from the factory image will also update the bootloader and modem.
 
-7. Set up the custom AVB public key in the bootloader after rebooting from fastbootd to bootloader.
+4. Set up the custom AVB public key in the bootloader after rebooting from fastbootd to bootloader.
 
    ```shell
    fastboot reboot-bootloader
@@ -131,7 +147,7 @@ Reading the [AVBRoot docs](https://github.com/chenxiaolong/AVBRoot) is essential
    fastboot flash avb_custom_key /path/to/avb_pkmd.bin
    ```
 
-8. **[Optional]** Before locking the bootloader, reboot into Android to confirm proper signing.
+5. **[Optional]** Before locking the bootloader, reboot into Android to confirm proper signing.
 
    Install the Magisk or KernelSU app and run:
 
@@ -145,7 +161,7 @@ Reading the [AVBRoot docs](https://github.com/chenxiaolong/AVBRoot) is essential
    init: [libfs_avb]Returning avb_handle with status: Success
    ```
 
-9. Reboot into fastboot and lock the bootloader. This will trigger a data wipe.
+6. Reboot into fastboot and lock the bootloader. This will trigger a data wipe.
 
    ```shell
    fastboot flashing lock
@@ -153,10 +169,9 @@ Reading the [AVBRoot docs](https://github.com/chenxiaolong/AVBRoot) is essential
 
    Confirm by pressing volume down and then power. Then reboot.
 
-> [!CAUTION]
-> **Do not uncheck `OEM unlocking`!**
+> [!CAUTION] > **Do not uncheck `OEM unlocking`!**
 
-10. For future updates, see the [updates section](#updates).
+7. For future updates, see the [updates section](#updates).
 
 ### Using Root
 
@@ -322,15 +337,16 @@ To revert to stock GrapheneOS or firmware:
 
 To know more about the projects used in this repository, refer to the following links:
 
-- [GrapheneOS](https://grapheneos.org)
-- [MSD](https://github.com/chenxiaolong/MSD)
-- [BCR](https://github.com/chenxiaolong/BCR)
-- [Custota](https://github.com/chenxiaolong/Custota)
-- [OEMUnlockOnBoot](https://github.com/chenxiaolong/OEMUnlockOnBoot)
-- [AVBRoot](https://github.com/chenxiaolong/AVBRoot)
 - [AFSR](https://github.com/chenxiaolong/AFSR)
 - [AlterInstaller](https://github.com/chenxiaolong/AlterInstaller)
+- [AVBRoot](https://github.com/chenxiaolong/AVBRoot)
+- [BCR](https://github.com/chenxiaolong/BCR)
+- [ChargeLimit](https://github.com/chenxiaolong/ChargeLimit)
+- [Custota](https://github.com/chenxiaolong/Custota)
+- [GrapheneOS](https://grapheneos.org)
 - [Magisk](https://github.com/pixincreate/Magisk)
+- [MSD](https://github.com/chenxiaolong/MSD)
+- [OEMUnlockOnBoot](https://github.com/chenxiaolong/OEMUnlockOnBoot)
 - [Rooted Graphene](https://github.com/schnatterer/rooted-graphene)
 
 ## License
