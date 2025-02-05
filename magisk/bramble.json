@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 2,
   "full": {
     "location_ota": "https://github.com/0cwa/PixeneOS/releases/download/2025012702/bramble-2025012702-magisk-28102-19f6dfc.zip",
     "location_csig": "https://github.com/0cwa/PixeneOS/releases/download/2025012702/bramble-2025012702-magisk-28102-19f6dfc.zip.csig"
