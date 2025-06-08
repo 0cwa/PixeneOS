@@ -10,7 +10,7 @@ on:
       device-id:
         description: Device code name
         required: true
-        default: "barbet"
+        default: "bramble"
       root:
         description: Add root to the build
         required: false
