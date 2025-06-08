@@ -1,7 +1,7 @@
 {
   "version": 2,
   "full": {
-    "location_ota": "https://github.com/0cwa/PixeneOS/releases/download/2025050700/shiba-2025050700-magisk-28104-c537ffc.zip",
-    "location_csig": "https://github.com/0cwa/PixeneOS/releases/download/2025050700/shiba-2025050700-magisk-28104-c537ffc.zip.csig"
+    "location_ota": "https://github.com/0cwa/PixeneOS/releases/download/2025060200/shiba-2025060200-magisk-29001-cda7afd.zip",
+    "location_csig": "https://github.com/0cwa/PixeneOS/releases/download/2025060200/shiba-2025060200-magisk-29001-cda7afd.zip.csig"
   }
 }
