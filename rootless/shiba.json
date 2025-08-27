@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "full": {
+    "location_ota": "https://github.com/0cwa/PixeneOS/releases/download/2025081400/shiba-2025081400-rootless-07c4da1.zip",
+    "location_csig": "https://github.com/0cwa/PixeneOS/releases/download/2025081400/shiba-2025081400-rootless-07c4da1.zip.csig"
+  }
+}
