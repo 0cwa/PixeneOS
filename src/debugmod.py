@@ -13,24 +13,25 @@ class DebugMod(Module):
     
     # Class constants
     SELINUX_RULES: ClassVar[list[str]] = [
-        'allow adbd adbd process setcurrent',
-        'allow adbd su process dyntransition',
-        'allow su * * *',
-        'allow init overlayfs_file dir relabelfrom',
-        'allow init overlayfs_file dir mounton',
-        'allow init overlayfs_file dir write',
-        'allow init overlayfs_file file append',
-        'allow init system_block_device blk_file write',
-        'allow fsck system_block_device blk_file ioctl',
-        'allow fsck system_block_device blk_file read',
-        'allow fsck system_block_device blk_file write',
-        'allow fsck system_block_device blk_file getattr',
-        'allow fsck system_block_device blk_file lock',
-        'allow fsck system_block_device blk_file append',
-        'allow fsck system_block_device blk_file map',
-        'allow fsck system_block_device blk_file open',
-        'allow fsck system_block_device blk_file watch',
-        'allow fsck system_block_device blk_file watch_reads',
+        # Core ADB debug rules
+        'allow adbd adbd process { fork signal_perms }',
+        'allow adbd self process { setcurrent getcurrent }',
+        'allow adbd device_debug_prop property_service { set }',
+        'allow adbd userdebug_prop property_service { set }',
+        'allow adbd shell_prop property_service { set }',
+        # Properties access
+        'allow init { system_prop userdebug_prop shell_prop } property_service { set }',
+        # USB configuration
+        'allow system_server usb_device dir { search }',
+        'allow system_server usb_device chr_file { open read write ioctl }',
+        # Debug properties access
+        'allow system_server device_debug_prop property_service { set }',
+        # ADB functionality
+        'allow adbd self capability { setuid setgid }',
+        'allow adbd rootfs dir { read open }',
+        'allow adbd port tcp_socket { name_bind }',
+        'allow adbd node_type tcp_socket { node_bind }',
+        'allow adbd self tcp_socket { create bind setopt accept listen read write }',
     ]
 
     SYSTEM_PROPS: ClassVar[dict[str, str]] = {
