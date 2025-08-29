@@ -19,15 +19,22 @@ function setup_debug_module() {
     local init_file="${my_avbroot_setup}/lib/modules/__init__.py"
     
     # Add import with other module imports
-    awk '/from lib\.modules\./ && !added {
-        print "from lib.modules.debugmod import DebugModule";
-        added=1;
+    awk '/^def all_modules/ {
+        print;
+        # Find the first import line
+        if (!found_imports) {
+            getline;
+            print "    from lib.modules.debugmod import DebugModule";
+            print;
+            found_imports = 1;
+            next;
+        }
     }
     {print}' "${init_file}" > "${init_file}.tmp"
     mv "${init_file}.tmp" "${init_file}"
     
     # Add module to the dictionary in all_modules()
-    awk '/^    return {/ {
+    awk '/    return {/ {
         print;
         print "        '\''debug'\'': DebugModule,";
         next;
