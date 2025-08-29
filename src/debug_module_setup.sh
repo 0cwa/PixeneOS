@@ -36,7 +36,7 @@ function setup_debug_module() {
     # Add module to the dictionary in all_modules()
     awk '/    return {/ {
         print;
-        print "        '\''debug'\'':\u0020DebugMod,";
+        print "        '\''debug'\'': DebugMod,";
         next;
     }
     {print}' "${init_file}" > "${init_file}.tmp"
