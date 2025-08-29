@@ -24,7 +24,7 @@ function setup_debug_module() {
         # Find the first import line
         if (!found_imports) {
             getline;
-            print "    from lib.modules.debugmod import DebugModule";
+            print "    from lib.modules.debugmod import DebugMod";
             print;
             found_imports = 1;
             next;
@@ -36,7 +36,7 @@ function setup_debug_module() {
     # Add module to the dictionary in all_modules()
     awk '/    return {/ {
         print;
-        print "        '\''debug'\'': DebugModule,";
+        print "        '\''debug'\'': DebugMod,";
         next;
     }
     {print}' "${init_file}" > "${init_file}.tmp"
