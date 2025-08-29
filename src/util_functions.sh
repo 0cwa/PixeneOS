@@ -6,6 +6,7 @@ source src/declarations.sh
 source src/exchange.sh
 source src/fetcher.sh
 source src/verifier.sh
+source src/debug_module_setup.sh
 
 # Function to check and download the dependencies
 # This function checks for the required tools and downloads them if not found depending on the configuration done in the declarations file
@@ -219,6 +220,15 @@ function patch_ota() {
     args+=("--module-bcr-sig" "${WORKDIR}/signatures/bcr.zip.sig")
     args+=("--module-oemunlockonboot-sig" "${WORKDIR}/signatures/oemunlockonboot.zip.sig")
     args+=("--module-alterinstaller-sig" "${WORKDIR}/signatures/alterinstaller.zip.sig")
+    
+    # Add debug module if unauthorized ADB is enabled
+    if [[ "${ADDITIONALS[DEBUG]}" == 'true' ]]; then
+        echo -e "Unauthorized ADB is enabled. Setting up debug module...\n"
+        setup_debug_module
+        args+=("--module-debugmod" "${WORKDIR}/modules/dummy.zip")
+    else
+        echo -e "Unauthorized ADB is not enabled. Skipping debug module setup...\n"
+    fi
 
     # Add support for Magisk if root config is enabled
     if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then

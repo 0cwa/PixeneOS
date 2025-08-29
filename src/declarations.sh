@@ -74,6 +74,7 @@ ADDITIONALS[MY_AVBROOT_SETUP]="${ADDITIONALS[MY_AVBROOT_SETUP]:-true}" # My AVBR
 
 ADDITIONALS[ROOT]="${ADDITIONALS_ROOT:-false}"   # Only Magisk is supported
 ADDITIONALS[RETRY]="${ADDITIONALS[RETRY]:-true}" # Auto download signatures
+ADDITIONALS[DEBUG]="${ADDITIONALS_DEBUG:-false}" # Enable unauthorized ADB
 
 # Outputs
 OUTPUTS[PATCHED_OTA]="${OUTPUTS[PATCHED_OTA]:-}"
