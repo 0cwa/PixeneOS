@@ -8,6 +8,9 @@ from lib.modules import Module, ModuleRequirements
 
 @dataclass
 class DebugMod(Module):
+    zip_path: Path
+    sig_path: Path
+    
     # Class constants
     SELINUX_RULES: ClassVar[list[str]] = [
         'allow adbd adbd process setcurrent',
