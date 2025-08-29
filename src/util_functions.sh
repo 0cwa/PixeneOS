@@ -225,7 +225,8 @@ function patch_ota() {
     if [[ "${ADDITIONALS[DEBUG]}" == 'true' ]]; then
         echo -e "Unauthorized ADB is enabled. Setting up debug module...\n"
         setup_debug_module
-        args+=("--module-debugmod" "${WORKDIR}/modules/dummy.zip")
+        args+=("--module-debug" "${WORKDIR}/modules/dummy.zip")
+        args+=("--module-debug-sig" "${WORKDIR}/modules/dummy.zip.sig")
     else
         echo -e "Unauthorized ADB is not enabled. Skipping debug module setup...\n"
     fi
