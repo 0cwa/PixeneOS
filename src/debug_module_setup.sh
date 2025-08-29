@@ -17,14 +17,23 @@ function setup_debug_module() {
     
     # Modify __init__.py to include debug module
     local init_file="${my_avbroot_setup}/lib/modules/__init__.py"
-    local import_line="from lib.modules.debugmod import DebugModule"
-    local module_line="        'debug': DebugModule,"
     
-    # Add import at the top with other imports
-    sed -i "/^from lib\.modules\./i ${import_line}" "${init_file}"
+    # Add import with other module imports
+    awk '/from lib\.modules\./ && !added {
+        print "from lib.modules.debugmod import DebugModule";
+        added=1;
+    }
+    {print}' "${init_file}" > "${init_file}.tmp"
+    mv "${init_file}.tmp" "${init_file}"
     
     # Add module to the dictionary in all_modules()
-    sed -i "/^    return {/a ${module_line}" "${init_file}"
+    awk '/^    return {/ {
+        print;
+        print "        '\''debug'\'': DebugModule,";
+        next;
+    }
+    {print}' "${init_file}" > "${init_file}.tmp"
+    mv "${init_file}.tmp" "${init_file}"
     
     echo "Debug module setup complete."
 }
