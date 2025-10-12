@@ -1,7 +1,7 @@
 {
   "version": 2,
   "full": {
-    "location_ota": "https://github.com/0cwa/PixeneOS/releases/download/2025091000/shiba-2025091000-magisk-30200-70b7f3b.zip",
-    "location_csig": "https://github.com/0cwa/PixeneOS/releases/download/2025091000/shiba-2025091000-magisk-30200-70b7f3b.zip.csig"
+    "location_ota": "https://github.com/0cwa/PixeneOS/releases/download/2025100900/shiba-2025100900-magisk-30400-6b58ef3.zip",
+    "location_csig": "https://github.com/0cwa/PixeneOS/releases/download/2025100900/shiba-2025100900-magisk-30400-6b58ef3.zip.csig"
   }
 }
