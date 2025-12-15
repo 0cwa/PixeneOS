@@ -67,7 +67,7 @@ jobs:
           fi
 
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           # Allow for switching to github-pages branch
           fetch-depth: 0
@@ -173,7 +173,7 @@ jobs:
           toolchain: stable 2 weeks ago
 
       - name: Build and Cache Rust Dependencies
-        uses: Swatinem/rust-cache@v2.8.1
+        uses: Swatinem/rust-cache@v2.8.2
 
       - name: Install Python
         uses: actions/setup-python@v6
