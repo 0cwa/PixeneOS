@@ -31,7 +31,7 @@ function get_latest_version() {
   local otaMetadata=$(curl -sL "${GRAPHENEOS[OTA_BASE_URL]}/${DEVICE_NAME}/${GRAPHENEOS[UPDATE_CHANNEL]}/a")
   echo -e "${otaMetadata}"
   local filename=$(echo "$otaMetadata" | jq -r '.response[0].filename')
-    echo -e "${filename}"
+  echo -e "${filename}"
   ${GRAPHENEOS[OTA_URL]}=$(echo "$otaMetadata" | jq -r '.response[0].url')
   version="${filename%%-${GRAPHENEOS[UPDATE_CHANNEL]}*}"
   
