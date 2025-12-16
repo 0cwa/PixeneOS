@@ -6,7 +6,8 @@ source src/declarations.sh
 
 # Fetch the latest version of GrapheneOS and Magisk and sets up the OTA URL
 function get_latest_version() {
-  local latest_grapheneos_version=$(curl -sL "${GRAPHENEOS[OTA_BASE_URL]}/${DEVICE_NAME}-${GRAPHENEOS[UPDATE_CHANNEL]}" | sed 's/ .*//')
+  
+  # local latest_grapheneos_version=$(curl -sL "${GRAPHENEOS[OTA_BASE_URL]}/${DEVICE_NAME}/${GRAPHENEOS[UPDATE_CHANNEL]}/1" | sed 's/ .*//')
   local latest_magisk_version=$(
     git ls-remote --tags "${DOMAIN}/${MAGISK[REPOSITORY]}.git" |
       awk -F'\t' '{print $2}' |
@@ -16,19 +17,24 @@ function get_latest_version() {
       tail -n1 |
       sed 's/canary-//'
   )
-
+  
   if [[ GRAPHENEOS[UPDATE_TYPE] == "install" ]]; then
     echo -e "The update type is set to \`install\` which is not supported by AVBRoot.\nExiting..."
     exit 1
   fi
 
   # Construct the URLs
-  GRAPHENEOS[OTA_TARGET]="${DEVICE_NAME}-${GRAPHENEOS[UPDATE_TYPE]}-${latest_grapheneos_version}"
+  # GRAPHENEOS[OTA_TARGET]="${DEVICE_NAME}-${GRAPHENEOS[UPDATE_TYPE]}-${latest_grapheneos_version}"
   # e.g. https://releases.grapheneos.org/bluejay-stable
-  GRAPHENEOS[OTA_URL]="${GRAPHENEOS[OTA_BASE_URL]}/${GRAPHENEOS[OTA_TARGET]}.zip"
+ # GRAPHENEOS[OTA_URL]="${GRAPHENEOS[OTA_BASE_URL]}/${GRAPHENEOS[OTA_TARGET]}.zip"
 
+  local otaMetadata=$(curl -sL "${GRAPHENEOS[OTA_BASE_URL]}/api/v1/${DEVICE_NAME}/${GRAPHENEOS[UPDATE_CHANNEL]}/a")
+  local filename=$(echo "$otaMetadata" | jq -r '.response[0].filename')
+  ${GRAPHENEOS[OTA_URL]}=$(echo "$otaMetadata" | jq -r '.response[0].url')
+  version="${filename%%-nightly*}"
+  
   # e.g.  bluejay-ota_update-2024080200
-  echo -e "GrapheneOS OTA target: \`${GRAPHENEOS[OTA_TARGET]}\`\nGrapheneOS OTA URL: ${GRAPHENEOS[OTA_URL]}\n"
+  echo -e "GrapheneOS OTA target: Lineage OTA URL: ${GRAPHENEOS[OTA_URL]}\n"
 
   if [[ -z "${latest_grapheneos_version}" ]]; then
     echo -e "Failed to get the latest version."
