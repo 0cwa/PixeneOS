@@ -230,6 +230,9 @@ function patch_ota() {
     else
         echo -e "Unauthorized ADB is not enabled. Skipping debug module setup...\n"
     fi
+    
+    # Hack patcher to skip patching vendor_boot sepolicies because Lineage doesn't have it
+    sed -i "/boot_fs\['vendor_boot'\]\.tree \/ 'sepolicy',/d" ${WORKDIR}/tools/my-avbroot-setup/patch.py
 
     # Add support for Magisk if root config is enabled
     if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
