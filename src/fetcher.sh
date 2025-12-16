@@ -27,8 +27,8 @@ function get_latest_version() {
   # GRAPHENEOS[OTA_TARGET]="${DEVICE_NAME}-${GRAPHENEOS[UPDATE_TYPE]}-${latest_grapheneos_version}"
   # e.g. https://releases.grapheneos.org/bluejay-stable
  # GRAPHENEOS[OTA_URL]="${GRAPHENEOS[OTA_BASE_URL]}/${GRAPHENEOS[OTA_TARGET]}.zip"
-  echo -e "Pulling release data from: ${GRAPHENEOS[OTA_BASE_URL]}/api/v1/${DEVICE_NAME}/${GRAPHENEOS[UPDATE_CHANNEL]}/a"
-  local otaMetadata=$(curl -sL "${GRAPHENEOS[OTA_BASE_URL]}/api/v1/${DEVICE_NAME}/${GRAPHENEOS[UPDATE_CHANNEL]}/a")
+  echo -e "Pulling release data from: ${GRAPHENEOS[OTA_BASE_URL]}/${DEVICE_NAME}/${GRAPHENEOS[UPDATE_CHANNEL]}/a"
+  local otaMetadata=$(curl -sL "${GRAPHENEOS[OTA_BASE_URL]}/${DEVICE_NAME}/${GRAPHENEOS[UPDATE_CHANNEL]}/a")
   echo -e "${otaMetadata}"
   local filename=$(echo "$otaMetadata" | jq -r '.response[0].filename')
     echo -e "${filename}"
