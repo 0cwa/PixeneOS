@@ -237,6 +237,7 @@ function patch_ota() {
       args+=("--patch-arg=--magisk" "--patch-arg" "${magisk_path}")
       args+=("--patch-arg=--magisk-preinit-device" "--patch-arg" "${MAGISK[PREINIT]}")
     else
+      args+=("--patch-arg=--rootless"
       echo -e "Magisk is not enabled. Skipping...\n"
     fi
 
