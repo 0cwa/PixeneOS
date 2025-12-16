@@ -29,11 +29,12 @@ function get_latest_version() {
  # GRAPHENEOS[OTA_URL]="${GRAPHENEOS[OTA_BASE_URL]}/${GRAPHENEOS[OTA_TARGET]}.zip"
 
   local otaMetadata=$(curl -sL "${GRAPHENEOS[OTA_BASE_URL]}/api/v1/${DEVICE_NAME}/${GRAPHENEOS[UPDATE_CHANNEL]}/a")
+  echo -e "${otaMetadata}"
   local filename=$(echo "$otaMetadata" | jq -r '.response[0].filename')
+    echo -e "${filename}"
   ${GRAPHENEOS[OTA_URL]}=$(echo "$otaMetadata" | jq -r '.response[0].url')
-  version="${filename%%-nightly*}"
+  version="${filename%%-${GRAPHENEOS[UPDATE_CHANNEL]}*}"
   
-  # e.g.  bluejay-ota_update-2024080200
   echo -e "GrapheneOS OTA target: Lineage OTA URL: ${GRAPHENEOS[OTA_URL]}\n"
 
   if [[ -z "${latest_grapheneos_version}" ]]; then
