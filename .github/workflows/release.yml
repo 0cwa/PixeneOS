@@ -238,11 +238,13 @@ jobs:
           git checkout gh-pages
           echo -e "Updating Configs for the new release..."
 
+          deviceRelease=$(ls *.json)
+
           # If root is true or the the release has `magisk` in <device_name>.json, use magisk flavor
-          if [ "${root}" = "true" ] || grep -q magisk "${{ env.DEVICE_NAME }}.json"; then
-            TARGET_FILE="${FLAVOR[0]}/${{ env.DEVICE_NAME }}.json"
+          if [ "${root}" = "true" ] || grep -q magisk "${deviceRelease}"; then
+            TARGET_FILE="${FLAVOR[0]}/${deviceRelease}"
           else
-            TARGET_FILE="${FLAVOR[1]}/${{ env.DEVICE_NAME }}.json"
+            TARGET_FILE="${FLAVOR[1]}/${deviceRelease}"
           fi
 
           echo -e "Updating Configs for the new release..."
@@ -255,8 +257,8 @@ jobs:
 
           # Copy from `./` to `./<flavor>/` if same tag doesn't exist in the target file or if it's a force-publish
           if [[ "${{ github.event.inputs.release-type }}" == "force-publish" ]] || ! grep -q "${{ env.GRAPHENEOS_VERSION }}" "${TARGET_FILE}"; then
-            echo -e "Copying ${{ env.DEVICE_NAME }}.json to ${TARGET_FILE}..."
-            cp "${{ env.DEVICE_NAME }}.json" "${TARGET_FILE}"
+            echo -e "Copying ${deviceRelease} to ${TARGET_FILE}..."
+            cp "${deviceRelease}" "${TARGET_FILE}"
             git add "${TARGET_FILE}"
           else
             echo -e "Deployed version (${{ env.GRAPHENEOS_VERSION }}) is same as current GrapheneOS release (${{ env.GRAPHENEOS_VERSION }}).\nUpdate skipped."
