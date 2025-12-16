@@ -10,16 +10,16 @@ on:
       device-id:
         description: Device code name
         required: true
-        default: "bramble"
+        default: "pdx235"
       root:
         description: Add root to the build
         required: false
         type: boolean
-        default: true
+        default: false
       magisk-preinit-device:
         description: Magisk preinit device. For example, "sda8", "sda15" etc.,
         required: false
-        default: "sda15"
+        default: ""
       update-channel:
         description: GrapheneOS update channel. Supports `alpha`, `beta` and `stable`. Defaults to `stable`
         required: false
