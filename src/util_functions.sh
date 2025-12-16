@@ -239,6 +239,8 @@ function patch_ota() {
                         logger.warning(f'SELinux policy does not exist: {sepolicy}')\\
                         continue" ${WORKDIR}/tools/my-avbroot-setup/lib/modules/${f}
         done
+    
+    args+=("--patch-arg" "--clear-vbmeta-flags")
 
     # Add support for Magisk if root config is enabled
     if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
