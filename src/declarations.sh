@@ -77,4 +77,4 @@ ADDITIONALS[RETRY]="${ADDITIONALS[RETRY]:-true}" # Auto download signatures
 ADDITIONALS[DEBUG]="${ADDITIONALS_DEBUG:-false}" # Enable unauthorized ADB
 
 # Outputs
-OUTPUTS[PATCHED_OTA]="${DEVICE_NAME:-}"
+OUTPUTS[PATCHED_OTA]="${OUTPUTS[PATCHED_OTA]}:-}"
