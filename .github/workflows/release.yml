@@ -21,7 +21,7 @@ on:
         required: false
         default: ""
       update-channel:
-        description: GrapheneOS update channel. Supports `alpha`, `beta` and `stable`. Defaults to `stable`
+        description: GrapheneOS update channel. Supports `alpha`, `beta` and `stable`.
         required: false
       allow_unauthorized_adb:
         description: Enable unauthorized ADB for debugging purposes
