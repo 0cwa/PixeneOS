@@ -232,12 +232,12 @@ function patch_ota() {
     fi
     
     # Hack patcher to skip patching non-existant sepolicies if Lineage doesn't have it
-    for f in $(ls ${WORKDIR}/tools/my-avbroot-setup/)
+    for f in $(ls ${WORKDIR}/tools/my-avbroot-setup/lib/modules/)
         do
         sed -i "/for sepolicy in sepolicies:/a\\
                     if not sepolicy.exists():\\
                         logger.warning(f'SELinux policy does not exist: {sepolicy}')\\
-                        continue" ${WORKDIR}/tools/my-avbroot-setup/${f}
+                        continue" ${WORKDIR}/tools/my-avbroot-setup/lib/modules/${f}
         done
 
     # Add support for Magisk if root config is enabled
