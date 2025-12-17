@@ -32,7 +32,7 @@ function get_latest_version() {
   local filename=$(echo "$otaMetadata" | jq -r '.response[0].filename')
   echo -e "${filename}"
   GRAPHENEOS[OTA_URL]=$(echo "$otaMetadata" | jq -r '.response[0].url')
-  latest_grapheneos_version="${filename%%-${GRAPHENEOS[UPDATE_CHANNEL]}*}"
+  latest_grapheneos_version=$(echo "${filename}" | grep -o '[0-9]\{8\}' | head -n1)
   GRAPHENEOS[OTA_TARGET]="${filename}"
   
   echo -e "GrapheneOS OTA target: Lineage OTA URL: ${GRAPHENEOS[OTA_URL]}\n"
