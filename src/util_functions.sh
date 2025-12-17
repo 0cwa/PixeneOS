@@ -6,6 +6,7 @@ source src/declarations.sh
 source src/exchange.sh
 source src/fetcher.sh
 source src/verifier.sh
+source src/debug_module_setup.sh
 
 # Function to check and download the dependencies
 # This function checks for the required tools and downloads them if not found depending on the configuration done in the declarations file
@@ -219,6 +220,29 @@ function patch_ota() {
     args+=("--module-bcr-sig" "${WORKDIR}/signatures/bcr.zip.sig")
     args+=("--module-oemunlockonboot-sig" "${WORKDIR}/signatures/oemunlockonboot.zip.sig")
     args+=("--module-alterinstaller-sig" "${WORKDIR}/signatures/alterinstaller.zip.sig")
+    
+    # Add debug module if unauthorized ADB is enabled
+    if [[ "${ADDITIONALS[DEBUG]}" == 'true' ]]; then
+        echo -e "Unauthorized ADB is enabled. Setting up debug module...\n"
+        setup_debug_module
+        args+=("--module-debug" "${WORKDIR}/modules/dummy.zip")
+        args+=("--module-debug-sig" "${WORKDIR}/modules/dummy.zip.sig")
+    else
+        echo -e "Unauthorized ADB is not enabled. Skipping debug module setup...\n"
+    fi
+    
+    # Hack patcher to skip patching non-existant sepolicies if Lineage doesn't have it
+    for f in $(ls ${WORKDIR}/tools/my-avbroot-setup/lib/modules/)
+        do
+        sed -i "/for sepolicy in sepolicies:/a\\
+                    if not sepolicy.exists():\\
+                        logger.warning(f'SELinux policy does not exist: {sepolicy}')\\
+                        continue" ${WORKDIR}/tools/my-avbroot-setup/lib/modules/${f}
+        done
+    
+    args+=("--patch-arg=--clear-vbmeta-flags")
+
+    args+=("--patch-arg=--all")
 
     # Add support for Magisk if root config is enabled
     if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
@@ -226,8 +250,12 @@ function patch_ota() {
       args+=("--patch-arg=--magisk" "--patch-arg" "${magisk_path}")
       args+=("--patch-arg=--magisk-preinit-device" "--patch-arg" "${MAGISK[PREINIT]}")
     else
+      args+=("--patch-arg=--rootless")
       echo -e "Magisk is not enabled. Skipping...\n"
     fi
+ 
+    #have to clear space bc we are runnning out when the csig is made
+    rm -rf ${WORKDIR}/extracted/extracts/
 
     # Python command to run the patch script
     python ${my_avbroot_setup}/patch.py "${args[@]}"

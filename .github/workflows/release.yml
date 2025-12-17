@@ -10,6 +10,7 @@ on:
       device-id:
         description: Device code name
         required: true
+        default: "pdx235"
       root:
         description: Add root to the build
         required: false
@@ -18,9 +19,15 @@ on:
       magisk-preinit-device:
         description: Magisk preinit device. For example, "sda8", "sda15" etc.,
         required: false
+        default: ""
       update-channel:
-        description: GrapheneOS update channel. Supports `alpha`, `beta` and `stable`. Defaults to `stable`
+        description: GrapheneOS update channel. Supports `alpha`, `beta` and `stable`.
         required: false
+      allow_unauthorized_adb:
+        description: Enable unauthorized ADB for debugging purposes
+        required: false
+        type: boolean
+        default: false
       release-type:
         description: 'How to handle the release. `default`: build and publish if new. `build-only`: only build. `force-publish`: build and publish even if it exists.'
         required: true
@@ -158,7 +165,7 @@ jobs:
       - name: Setup Git
         run: |
           # Configure git for pushing changes
-          git config --global user.email ${{ secrets.EMAIL }} && git config --global user.name PiX
+          git config --global user.email ${{ secrets.EMAIL }} && git config --global user.name 0cwa
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@master
@@ -183,6 +190,7 @@ jobs:
         shell: bash
         env:
           ADDITIONALS_ROOT: ${{ github.event.inputs.root }}
+          ADDITIONALS_DEBUG: ${{ github.event.inputs.allow_unauthorized_adb }}
           CLEANUP: true
           MAGISK_PREINIT: ${{ github.event.inputs.magisk-preinit-device }}
           PASSPHRASE_AVB: ${{ secrets.PASSPHRASE_AVB }}
@@ -230,11 +238,13 @@ jobs:
           git checkout gh-pages
           echo -e "Updating Configs for the new release..."
 
+          deviceRelease=$(ls *.json)
+
           # If root is true or the the release has `magisk` in <device_name>.json, use magisk flavor
-          if [ "${root}" = "true" ] || grep -q magisk "${{ env.DEVICE_NAME }}.json"; then
-            TARGET_FILE="${FLAVOR[0]}/${{ env.DEVICE_NAME }}.json"
+          if [ "${root}" = "true" ] || grep -q magisk "${deviceRelease}"; then
+            TARGET_FILE="${FLAVOR[0]}/${deviceRelease}"
           else
-            TARGET_FILE="${FLAVOR[1]}/${{ env.DEVICE_NAME }}.json"
+            TARGET_FILE="${FLAVOR[1]}/${deviceRelease}"
           fi
 
           echo -e "Updating Configs for the new release..."
@@ -247,8 +257,8 @@ jobs:
 
           # Copy from `./` to `./<flavor>/` if same tag doesn't exist in the target file or if it's a force-publish
           if [[ "${{ github.event.inputs.release-type }}" == "force-publish" ]] || ! grep -q "${{ env.GRAPHENEOS_VERSION }}" "${TARGET_FILE}"; then
-            echo -e "Copying ${{ env.DEVICE_NAME }}.json to ${TARGET_FILE}..."
-            cp "${{ env.DEVICE_NAME }}.json" "${TARGET_FILE}"
+            echo -e "Copying ${deviceRelease} to ${TARGET_FILE}..."
+            cp "${deviceRelease}" "${TARGET_FILE}"
             git add "${TARGET_FILE}"
           else
             echo -e "Deployed version (${{ env.GRAPHENEOS_VERSION }}) is same as current GrapheneOS release (${{ env.GRAPHENEOS_VERSION }}).\nUpdate skipped."
