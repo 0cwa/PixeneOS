@@ -14,7 +14,8 @@ function get_latest_version() {
       grep -E 'refs/tags/' |
       sed 's/refs\/tags\///' |
       sort -V |
-      tail -n1
+      tail -n1 |
+      sed 's/canary-//'
   )
   
   if [[ GRAPHENEOS[UPDATE_TYPE] == "install" ]]; then
@@ -60,7 +61,7 @@ function get() {
   local url="${2}"
   local signature_url="${3:-}"
 
-  echo "Downloading \`${filename}\` from \`${url}\`..."
+  echo "Downloading \`${filename}\` from `${url}`..."
 
   # `my-avbroot-setup` is a special case as it is a git repository
   if [[ "${filename}" == "my-avbroot-setup" ]]; then
@@ -73,7 +74,7 @@ function get() {
     fi
 
     # Download the files directly to modules directory
-    curl -sLfL "${url}" --output "${WORKDIR}/modules/${filename}.${suffix}"
+    curl -sL "${url}" --output "${WORKDIR}/modules/${filename}.${suffix}"
 
     if [[ "${filename}" != "my-avbroot-setup" ]]; then
       # Download signatures
