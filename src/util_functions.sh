@@ -232,15 +232,16 @@ function patch_ota() {
     fi
     
     # Hack patcher to skip patching non-existant sepolicies if Lineage doesn't have it
-    for f in $(ls ${WORKDIR}/tools/my-avbroot-setup/lib/modules/)
-        do
-        sed -i "/for sepolicy in sepolicies:/a\\
-                    if not sepolicy.exists():\\
-                        logger.warning(f'SELinux policy does not exist: {sepolicy}')\\
-                        continue" ${WORKDIR}/tools/my-avbroot-setup/lib/modules/${f}
-        done
+#    for f in $(ls ${WORKDIR}/tools/my-avbroot-setup/lib/modules/)
+ #       do
+  #      sed -i "/for sepolicy in sepolicies:/a\\
+   #                 if not sepolicy.exists():\\
+    #                    logger.warning(f'SELinux policy does not exist: {sepolicy}')\\
+     #                   continue" ${WORKDIR}/tools/my-avbroot-setup/lib/modules/${f}
+      #  done
     
     args+=("--patch-arg=--clear-vbmeta-flags")
+    args+=("--compatible-sepolicy")
 
     # Add support for Magisk if root config is enabled
     if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
@@ -358,7 +359,7 @@ function enable_venv() {
 # This function is called by download_dependencies function when running in non-interactive mode
 function url_constructor() {
   local repository="${1}"
-  local user='chenxiaolong'
+  local user='0cwa'
   INTERACTIVE_MODE="${2:-true}"
 
   local repository_upper_case=$(echo "${repository}" | tr '[:lower:]' '[:upper:]')
