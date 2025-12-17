@@ -66,7 +66,7 @@ function get() {
     fi
 
     # Download the files directly to modules directory
-    curl -sL "${url}" --output "${WORKDIR}/modules/${filename}.${suffix}"
+    curl -sLfL "${url}" --output "${WORKDIR}/modules/${filename}.${suffix}"
 
     if [[ "${filename}" != "my-avbroot-setup" ]]; then
       # Download signatures
