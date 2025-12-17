@@ -1,4 +1,4 @@
-name: Patch and Release OTA
+name: Patch and Release Lineage OTA
 
 on:
   schedule:
