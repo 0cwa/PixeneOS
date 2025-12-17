@@ -242,8 +242,6 @@ function patch_ota() {
     
     args+=("--patch-arg=--clear-vbmeta-flags")
 
-    args+=("--patch-arg=--all")
-
     # Add support for Magisk if root config is enabled
     if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
       echo -e "Magisk is enabled. Modifying the setup script...\n"
