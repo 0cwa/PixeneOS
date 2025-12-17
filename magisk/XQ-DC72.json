@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "full": {
+    "location_ota": "https://github.com/0cwa/PixeneOS/releases/download/lineage-23.0-20251212/pdx235-lineage-23.0-20251212-magisk-v30.6-b30f0dd.zip",
+    "location_csig": "https://github.com/0cwa/PixeneOS/releases/download/lineage-23.0-20251212/pdx235-lineage-23.0-20251212-magisk-v30.6-b30f0dd.zip.csig"
+  }
+}
