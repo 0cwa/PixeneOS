@@ -239,11 +239,13 @@ jobs:
           git checkout gh-pages
           echo -e "Updating Configs for the new release..."
 
+          deviceRelease=$(ls *.json)
+          
           # If root is true or the the release has `magisk` in <device_name>.json, use magisk flavor
-          if [ "${root}" = "true" ] || grep -q magisk "${{ env.DEVICE_NAME }}.json"; then
-            TARGET_FILE="${FLAVOR[0]}/${{ env.DEVICE_NAME }}.json"
+          if [ "${root}" = "true" ] || grep -q magisk "${deviceRelease}"; then
+            TARGET_FILE="${FLAVOR[0]}/${deviceRelease}"
           else
-            TARGET_FILE="${FLAVOR[1]}/${{ env.DEVICE_NAME }}.json"
+            TARGET_FILE="${FLAVOR[1]}/${deviceRelease}"
           fi
 
           echo -e "Updating Configs for the new release..."
