@@ -1,7 +1,7 @@
 {
   "version": 2,
   "full": {
-    "location_ota": "https://github.com/0cwa/PixeneOS/releases/download/lineage-23.0-20251212/pdx235-lineage-23.0-20251212-rootless-f47c318.zip",
-    "location_csig": "https://github.com/0cwa/PixeneOS/releases/download/lineage-23.0-20251212/pdx235-lineage-23.0-20251212-rootless-f47c318.zip.csig"
+    "location_ota": "https://github.com/0cwa/PixeneOS/releases/download/20251219/pdx235-20251219-rootless-b1fc60a.zip",
+    "location_csig": "https://github.com/0cwa/PixeneOS/releases/download/20251219/pdx235-20251219-rootless-b1fc60a.zip.csig"
   }
 }
