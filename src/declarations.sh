@@ -23,7 +23,7 @@ WORKDIR=".tmp"
 # GitHub variables
 DOMAIN="https://github.com"
 REPOSITORY="PixeneOS" # GitHub repository name
-USER="pixincreate"    # GitHub username
+USER="0cwa"    # GitHub username
 
 # Application version variables
 VERSION[AFSR]="${VERSION[AFSR]:-1.0.4}"
@@ -39,7 +39,7 @@ VERSION[OEMUNLOCKONBOOT]="${VERSION[OEMUNLOCKONBOOT]:-1.3}"
 
 # Magisk
 MAGISK[PREINIT]="${MAGISK_PREINIT:-}"
-MAGISK[REPOSITORY]="${USER}/Magisk"
+MAGISK[REPOSITORY]="pixincreate/Magisk"
 MAGISK[URL]="${DOMAIN}/${MAGISK[REPOSITORY]}"
 
 # Keys
@@ -74,6 +74,7 @@ ADDITIONALS[MY_AVBROOT_SETUP]="${ADDITIONALS[MY_AVBROOT_SETUP]:-true}" # My AVBR
 
 ADDITIONALS[ROOT]="${ADDITIONALS_ROOT:-false}"   # Only Magisk is supported
 ADDITIONALS[RETRY]="${ADDITIONALS[RETRY]:-true}" # Auto download signatures
+ADDITIONALS[DEBUG]="${ADDITIONALS_DEBUG:-false}" # Enable unauthorized ADB
 
 # Outputs
 OUTPUTS[PATCHED_OTA]="${OUTPUTS[PATCHED_OTA]:-}"
