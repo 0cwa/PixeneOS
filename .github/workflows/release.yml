@@ -134,7 +134,7 @@ jobs:
 
             if [ ${#missing_assets[@]} -eq 0 ]; then
               echo -e "::error::All required assets are present. Exiting..."
-              exit 1
+              exit 0
             else
               echo -e "Missing assets:"
               for missing_asset in "${missing_assets[@]}"; do
