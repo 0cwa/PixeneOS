@@ -1,7 +1,7 @@
 {
   "version": 2,
   "full": {
-    "location_ota": "https://github.com/0cwa/PixeneOS/releases/download/20251219/pdx235-20251219-rootless-b1fc60a.zip",
-    "location_csig": "https://github.com/0cwa/PixeneOS/releases/download/20251219/pdx235-20251219-rootless-b1fc60a.zip.csig"
+    "location_ota": "https://github.com/0cwa/PixeneOS/releases/download/20251226/pdx235-20251226-rootless-b1fc60a.zip",
+    "location_csig": "https://github.com/0cwa/PixeneOS/releases/download/20251226/pdx235-20251226-rootless-b1fc60a.zip.csig"
   }
 }
