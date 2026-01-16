@@ -135,7 +135,7 @@ jobs:
 
             if [ ${#missing_assets[@]} -eq 0 ]; then
               echo -e "::error::All required assets are present. Exiting..."
-              gh run cancel ${{ github.run_id }}
+              gh run cancel ${{ github.run_id }} || true
               exit 1
             else
               echo -e "Missing assets:"
