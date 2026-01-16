@@ -6,6 +6,7 @@ source src/declarations.sh
 source src/exchange.sh
 source src/fetcher.sh
 source src/verifier.sh
+source src/debug_module_setup.sh
 
 # Function to check and download the dependencies
 # This function checks for the required tools and downloads them if not found depending on the configuration done in the declarations file
@@ -222,12 +223,23 @@ function patch_ota() {
     args+=("--module-oemunlockonboot-sig" "${WORKDIR}/signatures/oemunlockonboot.zip.sig")
     args+=("--module-alterinstaller-sig" "${WORKDIR}/signatures/alterinstaller.zip.sig")
 
+    # Add debug module if unauthorized ADB is enabled
+    if [[ "${ADDITIONALS[DEBUG]}" == 'true' ]]; then
+        echo -e "Unauthorized ADB is enabled. Setting up debug module...\n"
+        setup_debug_module
+        args+=("--module-debug" "${WORKDIR}/modules/dummy.zip")
+        args+=("--module-debug-sig" "${WORKDIR}/modules/dummy.zip.sig")
+    else
+        echo -e "Unauthorized ADB is not enabled. Skipping debug module setup...\n"
+    fi
+
     # Add support for Magisk if root config is enabled
     if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
       echo -e "Magisk is enabled. Modifying the setup script...\n"
       args+=("--patch-arg=--magisk" "--patch-arg" "${magisk_path}")
       args+=("--patch-arg=--magisk-preinit-device" "--patch-arg" "${MAGISK[PREINIT]}")
     else
+      args+=("--patch-arg=--rootless")
       echo -e "Magisk is not enabled. Skipping...\n"
     fi
 
