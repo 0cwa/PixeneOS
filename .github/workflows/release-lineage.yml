@@ -45,6 +45,7 @@ env:
   GRAPHENEOS_UPDATE_CHANNEL: ${{ github.event.inputs.update-channel }}
   RUST_BACKTRACE: short
   RUSTUP_MAX_RETRIES: 10
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
   build:
@@ -135,7 +136,7 @@ jobs:
 
             if [ ${#missing_assets[@]} -eq 0 ]; then
               echo -e "::error::All required assets are present. Exiting..."
-              gh run cancel ${{ github.run_id }} || true
+              gh run cancel ${{ github.run_id }}
               exit 1
             else
               echo -e "Missing assets:"
