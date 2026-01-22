@@ -18,11 +18,10 @@
       customType: "regex",
       fileMatch: ["src/declarations.sh"],
       matchStrings: [
-        'VERSION\\[AVBROOT_SETUP\\]=\\"(?<currentDigest>.*?)\\"',
+        'VERSION\\[AVBROOT_SETUP\\]=\\"(?<currentValue>.*?)\\"',
       ],
-      depNameTemplate: "https://github.com/chenxiaolong/my-avbroot-setup.git",
-      datasourceTemplate: "git-refs",
-      currentValueTemplate: "master",
+      depNameTemplate: "chenxiaolong/my-avbroot-setup",
+      datasourceTemplate: "github-tags",
       versioningTemplate: "sha",
     },
     {
