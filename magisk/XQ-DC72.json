@@ -1,7 +1,7 @@
 {
   "version": 2,
   "full": {
-    "location_ota": "https://github.com/0cwa/PixeneOS/releases/download/20260116/pdx235-20260116-magisk-v30.6-b9f7a34.zip",
-    "location_csig": "https://github.com/0cwa/PixeneOS/releases/download/20260116/pdx235-20260116-magisk-v30.6-b9f7a34.zip.csig"
+    "location_ota": "https://github.com/0cwa/PixeneOS/releases/download/20260116/pdx235-20260116-magisk-v30.6-833c65c.zip",
+    "location_csig": "https://github.com/0cwa/PixeneOS/releases/download/20260116/pdx235-20260116-magisk-v30.6-833c65c.zip.csig"
   }
 }
