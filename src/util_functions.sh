@@ -365,7 +365,7 @@ function url_constructor() {
   echo -e "Constructing URL for \`${repository}\` as \`${repository}\` is non-existent at \`${WORKDIR}\`..."
   # `my-avbroot-setup` is git repository
   if [[ "${repository}" == "my-avbroot-setup" ]]; then
-    URL="${DOMAIN}/${user}/${repository}"
+    URL="${DOMAIN}/0cwa/${repository}"
   else
     # Afsr, avbroot, and custota-tool are binaries and are platform dependent. Modules are zipped files.
     if [[ "${repository}" == "afsr" || "${repository}" == "avbroot" || "${repository}" == "custota-tool" ]]; then
