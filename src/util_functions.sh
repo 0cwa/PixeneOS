@@ -65,8 +65,10 @@ function check_and_download_dependencies() {
   if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
     RETRY_COUNT=0 # Reset retry count for magisk
     while true; do
-      # Magisk is an exception as it is an APK and hecne we do the get call directly and verif its existence
-      get "magisk" "${MAGISK[URL]}/releases/download/${VERSION[MAGISK]}/app-release.apk"
+      # Magisk is an exception as it is an APK and hence we do the get call directly and verify
+      URL="${MAGISK[URL]}/releases/download/${VERSION[MAGISK]}/app-release.apk"
+      echo "URL for \`magisk\`: ${URL}"
+      get "magisk" "${URL}"
       verify_downloads "magisk"
 
       [[ "${ADDITIONALS[RETRY]}" == "true" ]] && [[ "${RETRY}" == "true" ]] || break
@@ -220,7 +222,7 @@ function patch_ota() {
     args+=("--module-bcr-sig" "${WORKDIR}/signatures/bcr.zip.sig")
     args+=("--module-oemunlockonboot-sig" "${WORKDIR}/signatures/oemunlockonboot.zip.sig")
     args+=("--module-alterinstaller-sig" "${WORKDIR}/signatures/alterinstaller.zip.sig")
-    
+
     # Add debug module if unauthorized ADB is enabled
     if [[ "${ADDITIONALS[DEBUG]}" == 'true' ]]; then
         echo -e "Unauthorized ADB is enabled. Setting up debug module...\n"
@@ -243,6 +245,14 @@ function patch_ota() {
     args+=("--patch-arg=--clear-vbmeta-flags")
     args+=("--compatible-sepolicy")
 
+    echo -e "MAS_COMPATIBLE_SEPOLICY value: ${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}" #debug Placed above the patch arguments
+    if [[ "${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}" == 'true' ]]; then
+      echo -e "Compatible SEPolicy Flag is enabled.  Adding patch argument to setup script...\n"
+      args+=("--compatible-sepolicy")
+    else
+      echo -e "Compatible SEPolicy Flag is NOT enabled. Continuing...\n"
+    fi
+
     # Add support for Magisk if root config is enabled
     if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
       echo -e "Magisk is enabled. Modifying the setup script...\n"
@@ -252,8 +262,8 @@ function patch_ota() {
       args+=("--patch-arg=--rootless")
       echo -e "Magisk is not enabled. Skipping...\n"
     fi
- 
-    #have to clear space bc we are runnning out when the csig is made
+    
+    # Have to clear storage space because, `csig` results in storage runout
     rm -rf ${WORKDIR}/extracted/extracts/
 
     # Python command to run the patch script

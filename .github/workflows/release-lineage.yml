@@ -1,4 +1,4 @@
-name: Patch and Release OTA
+name: Patch and Release Lineage OTA
 
 on:
   schedule:
@@ -15,14 +15,19 @@ on:
         description: Add root to the build
         required: false
         type: boolean
-        default: false
+        default: true
       magisk-preinit-device:
         description: Magisk preinit device. For example, "sda8", "sda15" etc.,
         required: false
-        default: ""
+        default: "sda47"
       update-channel:
-        description: GrapheneOS update channel. Supports `alpha`, `beta` and `stable`.
+        description: LineageOS update channel. Maybe supports `alpha`, `beta`, `stable`, and `nightly`. Defaults to `nightly`
         required: false
+      compatible-sepolicy-patching:
+        description: Enable --compatible-sepolicy flag. Created to enable Lineage Support
+        required: false
+        type: boolean
+        default: true
       allow_unauthorized_adb:
         description: Enable unauthorized ADB for debugging purposes
         required: false
@@ -45,6 +50,7 @@ env:
   GRAPHENEOS_UPDATE_CHANNEL: ${{ github.event.inputs.update-channel }}
   RUST_BACKTRACE: short
   RUSTUP_MAX_RETRIES: 10
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
   build:
@@ -69,6 +75,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
         with:
+          ref: lineage
           # Allow for switching to github-pages branch
           fetch-depth: 0
 
@@ -105,7 +112,7 @@ jobs:
           if git show-ref --tags $GRAPHENEOS_VERSION --quiet; then
             echo -e "Tag with GrapheneOS version $GRAPHENEOS_VERSION already exists. Looking for assets..."
             # Fetch the release information for the tag
-            repo_url="https://api.github.com/repos/${{ github.repository }}/releases/tags/$GRAPHENEOS_VERSION"
+            repo_url="https://api.github.com/repos/${{ github.repository }}/releases/tags/${GRAPHENEOS_VERSION}"
             release_info=$(curl -sL "$repo_url")
 
             # Define required assets
@@ -196,6 +203,7 @@ jobs:
           MAGISK_PREINIT: ${{ github.event.inputs.magisk-preinit-device }}
           PASSPHRASE_AVB: ${{ secrets.PASSPHRASE_AVB }}
           PASSPHRASE_OTA: ${{ secrets.PASSPHRASE_OTA }}
+          ADDITIONALS_MAS_COMPATIBLE_SEPOLICY: ${{ github.event.inputs.compatible-sepolicy-patching }}
         run: |
           echo -e "Running release script.."
 
@@ -240,7 +248,7 @@ jobs:
           echo -e "Updating Configs for the new release..."
 
           deviceRelease=$(ls *.json)
-
+          
           # If root is true or the the release has `magisk` in <device_name>.json, use magisk flavor
           if [ "${root}" = "true" ] || grep -q magisk "${deviceRelease}"; then
             TARGET_FILE="${FLAVOR[0]}/${deviceRelease}"
@@ -258,7 +266,7 @@ jobs:
 
           # Copy from `./` to `./<flavor>/` if same tag doesn't exist in the target file or if it's a force-publish
           if [[ "${{ github.event.inputs.release-type }}" == "force-publish" ]] || ! grep -q "${{ env.GRAPHENEOS_VERSION }}" "${TARGET_FILE}"; then
-            echo -e "Copying ${deviceRelease} to ${TARGET_FILE}..."
+            echo -e "Copying ${{ env.DEVICE_NAME }}.json to ${TARGET_FILE}..."
             cp "${deviceRelease}" "${TARGET_FILE}"
             git add "${TARGET_FILE}"
           else
@@ -272,4 +280,4 @@ jobs:
           fi
 
           # Switch back to main branch
-          git checkout main
+          git checkout lineage
