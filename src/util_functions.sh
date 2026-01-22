@@ -243,7 +243,6 @@ function patch_ota() {
       #  done
     
     args+=("--patch-arg=--clear-vbmeta-flags")
-    args+=("--compatible-sepolicy")
 
     echo -e "MAS_COMPATIBLE_SEPOLICY value: ${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}" #debug Placed above the patch arguments
     if [[ "${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}" == 'true' ]]; then
