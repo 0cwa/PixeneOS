@@ -23,6 +23,11 @@ on:
       update-channel:
         description: LineageOS update channel. Maybe supports `alpha`, `beta`, `stable`, and `nightly`. Defaults to `nightly`
         required: false
+      compatible-sepolicy-patching:
+        description: Enable --compatible-sepolicy flag. Created to enable Lineage Support
+        required: false
+        type: boolean
+        default: true
       allow_unauthorized_adb:
         description: Enable unauthorized ADB for debugging purposes
         required: false
@@ -198,6 +203,7 @@ jobs:
           MAGISK_PREINIT: ${{ github.event.inputs.magisk-preinit-device }}
           PASSPHRASE_AVB: ${{ secrets.PASSPHRASE_AVB }}
           PASSPHRASE_OTA: ${{ secrets.PASSPHRASE_OTA }}
+          ADDITIONALS_MAS_COMPATIBLE_SEPOLICY: ${{ github.event.inputs.compatible-sepolicy-patching }}
         run: |
           echo -e "Running release script.."
 
