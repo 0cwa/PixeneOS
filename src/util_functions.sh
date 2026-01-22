@@ -232,6 +232,18 @@ function patch_ota() {
     else
         echo -e "Unauthorized ADB is not enabled. Skipping debug module setup...\n"
     fi
+    
+    # Hack patcher to skip patching non-existant sepolicies if Lineage doesn't have it
+#    for f in $(ls ${WORKDIR}/tools/my-avbroot-setup/lib/modules/)
+ #       do
+  #      sed -i "/for sepolicy in sepolicies:/a\\
+   #                 if not sepolicy.exists():\\
+    #                    logger.warning(f'SELinux policy does not exist: {sepolicy}')\\
+     #                   continue" ${WORKDIR}/tools/my-avbroot-setup/lib/modules/${f}
+      #  done
+    
+    args+=("--patch-arg=--clear-vbmeta-flags")
+    args+=("--compatible-sepolicy")
 
     echo -e "MAS_COMPATIBLE_SEPOLICY value: ${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}" #debug Placed above the patch arguments
     if [[ "${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}" == 'true' ]]; then

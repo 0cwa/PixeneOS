@@ -28,9 +28,7 @@ USER="0cwa"    # GitHub username
 # Application version variables
 VERSION[AFSR]="${VERSION[AFSR]:-1.0.4}"
 VERSION[ALTERINSTALLER]="${VERSION[ALTERINSTALLER]:-2.3}"
-
 VERSION[AVBROOT]="${VERSION[AVBROOT]:-3.24.0}"
-
 VERSION[AVBROOT_SETUP]="357d448" # Commit hash
 VERSION[BCR]="${VERSION[BCR]:-1.87}"
 VERSION[CUSTOTA]="${VERSION[CUSTOTA]:-5.19}"
@@ -54,8 +52,8 @@ KEYS[OTA_BASE64]="${KEYS[OTA_BASE64]:-''}"
 KEYS[PKMD]="${KEYS[PKMD]:-avb_pkmd.bin}"
 
 # GrapheneOS
-GRAPHENEOS[OTA_BASE_URL]="https://releases.grapheneos.org"
-GRAPHENEOS[UPDATE_CHANNEL]="${GRAPHENEOS_UPDATE_CHANNEL:-stable}"
+GRAPHENEOS[OTA_BASE_URL]="https://download.lineageos.org/api/v1"
+GRAPHENEOS[UPDATE_CHANNEL]="${GRAPHENEOS_UPDATE_CHANNEL:-nightly}"
 GRAPHENEOS[UPDATE_TYPE]="${GRAPHENEOS[UPDATE_TYPE]:-ota_update}" # avbroot supports only `ota_update` and not `install` (factory images)
 GRAPHENEOS[OTA_URL]="${GRAPHENEOS[OTA_URL]:-}"                   # Will be constructed from the latest version
 GRAPHENEOS[OTA_TARGET]="${GRAPHENEOS[OTA_TARGET]:-}"             # Will be constructed from the latest version
