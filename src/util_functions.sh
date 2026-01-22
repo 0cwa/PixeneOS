@@ -246,7 +246,7 @@ function patch_ota() {
     echo -e "MAS_COMPATIBLE_SEPOLICY value: ${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}" #debug
     if [[ "${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}" == 'true' ]]; then
       echo -e "Compatible SEPolicy Flag is enabled.  Adding patch argument to setup script...\n"
-      args+=("--patch-arg=--compatible-sepolicy")
+      args+=("--compatible-sepolicy")
     else
       echo -e "Compatible SEPolicy Flag is NOT enabled. Continuing...\n"
     fi
