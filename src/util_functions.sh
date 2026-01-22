@@ -243,6 +243,13 @@ function patch_ota() {
       echo -e "Magisk is not enabled. Skipping...\n"
     fi
 
+    if [[ "${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}" == 'true' ]]; then
+      echo -e "Compatible SEPolicy Flag is enabled.  Adding patch argument to setup script...\n"
+      args+=("--patch-arg=--compatible-sepolicy")
+    else
+      echo -e "Compatible SEPolicy Flag is NOT enabled. Continuing...\n"
+    fi
+
     # Have to clear storage space because, `csig` results in storage runout
     rm -rf ${WORKDIR}/extracted/extracts/
 
