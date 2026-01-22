@@ -242,7 +242,8 @@ function patch_ota() {
       args+=("--patch-arg=--rootless")
       echo -e "Magisk is not enabled. Skipping...\n"
     fi
-
+    
+    echo "MAS_COMPATIBLE_SEPOLICY value: ${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}" #debug
     if [[ "${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}" == 'true' ]]; then
       echo -e "Compatible SEPolicy Flag is enabled.  Adding patch argument to setup script...\n"
       args+=("--patch-arg=--compatible-sepolicy")
