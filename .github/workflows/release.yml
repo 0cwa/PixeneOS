@@ -45,6 +45,7 @@ env:
   GRAPHENEOS_UPDATE_CHANNEL: ${{ github.event.inputs.update-channel }}
   RUST_BACKTRACE: short
   RUSTUP_MAX_RETRIES: 10
+  GH_TOKEN: ${{ secrets.GH_TOKEN }} #Optional, In order to cancel jobs instead of erroring out when files already exist
 
 jobs:
   build:
