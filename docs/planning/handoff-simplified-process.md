@@ -56,7 +56,7 @@ Next — pick from here first:
 1. RELEASE-1 — Decouple generated update URLs from hard-coded GitHub releases.
    - Can be planned in parallel after branch splitting is safe.
    - Keep separate from upstream PR prep branches.
-2. ROMCOMPAT-1 — Analyze my-avbroot-setup@91e49bc hunks before maintainer ratification.
+2. ROMCOMPAT-1 / META-3 — Analyze and ratify my-avbroot-setup@91e49bc hunks before downstream ROM work.
 3. MATRIX-1 — Minimal TOML device matrix with privacy/version/smoke placeholders folded into one thin slice.
 
 Deferred/Later/Icebox:

@@ -18,7 +18,7 @@ HYGIENE-5 identified several `origin/lineage` commits whose ideas may be useful 
   - `local-only-workflow-hardening`,
   - `obsolete-after-ROMCOMPAT-2`,
   - `reject`.
-- The document cross-references ROMCOMPAT-1 for the `91e49bc` analysis rather than duplicating it.
+- The document cross-references ROMCOMPAT-1 for the `91e49bc` analysis rather than duplicating it. The authoritative `91e49bc` per-hunk table now lives in the fork repo at [`0cwa/my-avbroot-setup:docs/upstream-disposition.md`](https://github.com/0cwa/my-avbroot-setup/blob/master/docs/upstream-disposition.md); link to that, not to a PixeneOS path.
 - No code is cherry-picked from `origin/lineage` during this ticket.
 
 ## Depends
@@ -35,7 +35,7 @@ HYGIENE-5 category `(d)` starting points:
 - `95336ae` — handle OTA zip metadata that does not match the provided `DEVICE_NAME`.
 - `c9caf28` — update `my-avbroot-setup` to `91e49bc` for LineageOS SELinux compatibility.
 
-This ticket should wait until ROMCOMPAT-1 has decided how to handle `91e49bc` hunks.
+This ticket can now consume the ROMCOMPAT-1 / META-3 disposition for the `91e49bc` hunks.
 
 ## Out of scope
 

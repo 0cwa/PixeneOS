@@ -27,7 +27,7 @@ The current working tree has several completed local tickets mixed together. Do 
 ### Next — release URL, Lineage, and matrix foundation
 
 1. **RELEASE-1 — Generated update URL cleanup.** Can be planned in parallel once branch splitting is safe; do not mix it into upstream PR prep branches.
-2. **ROMCOMPAT-1 — Hunk disposition for `my-avbroot-setup@91e49bc`.** Analyze first; maintainer ratifies upstream-vs-fork choices afterward.
+2. **ROMCOMPAT-1 / META-3 — Hunk disposition for `my-avbroot-setup@91e49bc`.** *Done.* Authoritative output now lives in the fork repo at [`0cwa/my-avbroot-setup:docs/upstream-disposition.md`](https://github.com/0cwa/my-avbroot-setup/blob/master/docs/upstream-disposition.md); META-3 ratified the U/F/D split.
 3. **MATRIX-1 — Minimal TOML device matrix.** Use TOML by default and fold privacy/version/smoke placeholders into one thin matrix slice.
 4. **ROMCOMPAT-2/3 — Minimal ROM/device capability config and Lineage validation.** Run after ROMCOMPAT-1 clarifies what Lineage actually needs.
 

@@ -14,9 +14,11 @@ Project-specific terms. New jargon goes here so tickets can stay terse.
 - **Custota update server** — HTTP endpoint serving `<device>.json` + the OTAs.
 - **sepolicy** — SELinux policy. Each ROM has its own; cross-ROM patching requires merging or compatible-mode emitting.
 - **CIL** — Common Intermediate Language; SELinux's policy DSL. `cil_rules.py` from `91e49bc` provides a Python emitter for compat-mode rules.
-- **`--compatible-sepolicy`** — flag introduced in upstream `91e49bc` of `my-avbroot-setup`. Lets a single tooling pass emit sepolicy that works against multiple ROM bases.
+- **`--compatible-sepolicy`** — flag introduced in `91e49bc` of `0cwa/my-avbroot-setup` (the PixeneOS-side fork, not upstream). Lets a single tooling pass emit sepolicy that works against multiple ROM bases.
 - **ODM partition** — vendor-specific partition; some Lineage devices need ODM-aware patches. `91e49bc` added handling.
 - **`file_contexts`** — file-path → SELinux-label table per partition. Partition-specific ones added in `91e49bc`.
+
+  *(For the per-hunk decomposition of what `91e49bc` adds and which hunks are upstream-bound vs fork-only, see [`0cwa/my-avbroot-setup:docs/upstream-disposition.md`](https://github.com/0cwa/my-avbroot-setup/blob/master/docs/upstream-disposition.md).)*
 - **vbmeta** — top-level AVB metadata blob; signed; references chained-partition hashes.
 
 ## Module ecosystem

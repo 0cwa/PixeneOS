@@ -10,19 +10,15 @@ Status legend: `open` `in_progress` `done` `blocked` `deferred` `cancelled`
 
 ### Now — pick from here first
 
-| ID | Title | Why now |
-|---|---|---|
-| UPSTREAM-2 | Prepare upstream PR: configurable release owner/repository | Best upstream candidate; should be cut before more feature work changes the same files. |
-| UPSTREAM-3 | Prepare upstream PR: Renovate `managerFilePatterns` | Small standalone maintenance PR if still applicable upstream. |
-| UPSTREAM-4 | Prepare upstream PR: ignore Python/local artifacts | Optional small housekeeping PR; keep signing-key ignores separate. |
+_(all Now tickets done — pick from Next)_
 
 ### Next — small foundations after Now
 
 | ID | Title | Simplified direction |
 |---|---|---|
-| RELEASE-1 | Decouple generated update URLs from hard-coded GitHub releases | Can be planned in parallel after branch split is safe; keep separate from upstream PR branch prep. |
-| ROMCOMPAT-1 | Per-hunk disposition for `my-avbroot-setup@91e49bc` | Analysis is allowed to run before any META ratification; output informs upstream/fork choice. |
 | MATRIX-1 | Minimal TOML device matrix | Use TOML by default; fold privacy flag, smoke-test placeholder, and version-capture notes into one thin slice. |
+
+ROMCOMPAT-1 disposition is complete; the authoritative per-hunk table now lives in the fork repo at [`0cwa/my-avbroot-setup:docs/upstream-disposition.md`](https://github.com/0cwa/my-avbroot-setup/blob/master/docs/upstream-disposition.md). META-3 has ratified that split, and ROMCOMPAT-2/3/4 are unblocked from that decision.
 
 ### Later / defer by default
 
@@ -62,11 +58,12 @@ Status legend: `open` `in_progress` `done` `blocked` `deferred` `cancelled`
 | UPSTREAM-2 | Prepare upstream PR: configurable release owner/repository | now | done | UPSTREAM-1 |
 | UPSTREAM-3 | Prepare upstream PR: Renovate `managerFilePatterns` | now | done | UPSTREAM-1 |
 | UPSTREAM-4 | Prepare upstream PR: ignore Python/local artifacts | now | done | UPSTREAM-1 |
-| RELEASE-1 | Decouple generated update URLs from hard-coded GitHub releases | next | open | REBRAND-1 |
-| ROMCOMPAT-1 | Per-hunk disposition for `my-avbroot-setup@91e49bc` | next | open | Trigger for META-3 ratification, not blocked by it |
-| ROMCOMPAT-2 | Minimal ROM/device capability config | next | open | ROMCOMPAT-1 |
+| RELEASE-1 | Decouple generated update URLs from hard-coded GitHub releases | next | done | REBRAND-1 |
+| RELEASE-2 | Implement `PIXENEOS_RELEASE_BASE_URL` and fix `my-avbroot-setup` source URL | next | done | RELEASE-1 ✅ |
+| ROMCOMPAT-1 | Per-hunk disposition for `my-avbroot-setup@91e49bc` | next | done | Output moved to `0cwa/my-avbroot-setup:docs/upstream-disposition.md`; ratified by META-3 ✅ |
+| ROMCOMPAT-2 | Minimal ROM/device capability config | next | open | ROMCOMPAT-1 ✅, META-3 ✅ |
 | ROMCOMPAT-3 | Lineage csig / OTA / Custota validation on pdx235 | next | open | ROMCOMPAT-2 |
-| ROMCOMPAT-4 | Triage Lineage-derived potentially-upstreamable hunks | next | blocked | HYGIENE-5 ✅, ROMCOMPAT-1 |
+| ROMCOMPAT-4 | Triage Lineage-derived potentially-upstreamable hunks | next | open | HYGIENE-5 ✅, ROMCOMPAT-1 ✅, META-3 ✅ |
 | MATRIX-1 | Minimal TOML single-source-of-truth matrix file | next | open | TOML default; no META-4 blocker |
 | MATRIX-2 | Per-device `public_artifacts` privacy flag | later | deferred | Fold minimal column semantics into MATRIX-1; workflow plumbing later |
 | MATRIX-3 | Refactor workflows into single matrix job | later | deferred | MATRIX-1; implement after matrix proves useful |
@@ -94,7 +91,7 @@ META tickets are no longer a ladder that blocks all downstream work. They are tr
 |---|---|---|---|
 | META-1 | SPDX/license header policy | done | ADR-0003 resolved: AGPL-3.0-or-later for new project-authored code; third-party-derived code keeps upstream license/copyright. |
 | META-2 | Rebrand in-place vs fresh repo | deferred | Trigger when an actual repo rename is proposed. |
-| META-3 | Upstream PR vs compatible fork for `91e49bc` | open | ROMCOMPAT-1 may run first; maintainer ratifies the completed hunk table. |
+| META-3 | Upstream PR vs compatible fork for `91e49bc` | done | Ratified fork-side `docs/upstream-disposition.md`; U sequence PR-A → PR-C → PR-B. |
 | META-4 | Matrix file format | done | Default TOML; revisit only if tooling proves painful. |
 | META-5 | Default `public_artifacts: false` | done | Default private for new rows; preserve currently public compatibility rows explicitly before changing publishing. |
 | META-6 | Cache backend | deferred | GitHub Actions cache first when optimization resumes. |
