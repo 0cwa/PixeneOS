@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2024-2026 PixeneOS contributors
 
 # This project is highly dependent on chenxiaolong's projects.
 # Project PixeneOS needs to be up-to-date with chenxiaolong's projects
