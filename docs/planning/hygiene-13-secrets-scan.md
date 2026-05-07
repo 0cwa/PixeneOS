@@ -48,7 +48,7 @@ src/scan_secrets.sh --all
 Positive fake-secret check using an isolated temporary git index:
 
 ```sh
-KEYS_AVB_BASE64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+KEYS_AVB_BASE64=<base64 signing key from GitHub Secrets>
 ```
 
 Result: blocked with `contains a PixeneOS base64 signing secret assignment`.
