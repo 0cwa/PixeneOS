@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2025 0cwa
 
 # This script is responsible for setting up the debug module when unauthorized ADB is enabled
 

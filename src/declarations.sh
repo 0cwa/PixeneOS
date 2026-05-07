@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2024-2026 PixeneOS contributors
 
 # Declare associative arrays and variables
 declare -A ADDITIONALS
@@ -22,8 +24,12 @@ WORKDIR=".tmp"
 
 # GitHub variables
 DOMAIN="https://github.com"
-REPOSITORY="PixeneOS" # GitHub repository name
-USER="0cwa"    # GitHub username
+# Release asset owner/repository. Resolved at use time so env.toml values loaded
+# after this file, GitHub Actions context, and defaults all participate safely.
+PIXENEOS_RELEASE_OWNER="${PIXENEOS_RELEASE_OWNER:-}"
+PIXENEOS_RELEASE_REPOSITORY="${PIXENEOS_RELEASE_REPOSITORY:-}"
+PIXENEOS_RELEASE_BASE_URL="${PIXENEOS_RELEASE_BASE_URL:-}"
+PIXENEOS_AVBROOT_SETUP_SOURCE="${PIXENEOS_AVBROOT_SETUP_SOURCE:-}"
 
 # Application version variables
 VERSION[AFSR]="${VERSION[AFSR]:-1.0.4}"

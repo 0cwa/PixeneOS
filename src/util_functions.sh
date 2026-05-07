@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2024-2026 PixeneOS contributors
 
 # This script is a part of the main script and is responsible for the utility functions used in the main script.
 
@@ -139,7 +141,26 @@ function cleanup() {
 # Generate the AVB and OTA signing keys.
 # Has to be called manually.
 function generate_keys() {
-  local public_key_metadata='avb_pkmd.bin'
+  # Keep locally generated signing material in the ignored .keys directory unless
+  # the caller explicitly set custom KEYS paths before sourcing this file.
+  if [[ "${KEYS[AVB]}" == "avb.key" ]]; then
+    KEYS[AVB]=".keys/avb.key"
+  fi
+  if [[ "${KEYS[OTA]}" == "ota.key" ]]; then
+    KEYS[OTA]=".keys/ota.key"
+  fi
+  if [[ "${KEYS[CERT_OTA]}" == "ota.crt" ]]; then
+    KEYS[CERT_OTA]=".keys/ota.crt"
+  fi
+  if [[ "${KEYS[PKMD]}" == "avb_pkmd.bin" ]]; then
+    KEYS[PKMD]=".keys/avb_pkmd.bin"
+  fi
+
+  mkdir -p \
+    "$(dirname "${KEYS[AVB]}")" \
+    "$(dirname "${KEYS[OTA]}")" \
+    "$(dirname "${KEYS[CERT_OTA]}")" \
+    "$(dirname "${KEYS[PKMD]}")"
 
   # Generate the AVB and OTA signing keys
   avbroot key generate-key -o "${KEYS[AVB]}"
@@ -147,7 +168,7 @@ function generate_keys() {
 
   # Convert the public key portion of the AVB signing key to the AVB public key metadata format
   # This is the format that the bootloader requires when setting the custom root of trust
-  avbroot key extract-avb -k "${KEYS[AVB]}" -o "${public_key_metadata}"
+  avbroot key extract-avb -k "${KEYS[AVB]}" -o "${KEYS[PKMD]}"
 
   # Generate a self-signed certificate for the OTA signing key
   # This is used by recovery to verify OTA updates when sideloading
@@ -262,18 +283,56 @@ function patch_ota() {
   deactivate
 }
 
+function resolve_release_repository() {
+  local github_repository="${GITHUB_REPOSITORY:-}"
+
+  if [[ -z "${PIXENEOS_RELEASE_OWNER}" && "${github_repository}" == */* ]]; then
+    PIXENEOS_RELEASE_OWNER="${github_repository%%/*}"
+  fi
+
+  if [[ -z "${PIXENEOS_RELEASE_REPOSITORY}" && "${github_repository}" == */* ]]; then
+    PIXENEOS_RELEASE_REPOSITORY="${github_repository#*/}"
+  fi
+
+  PIXENEOS_RELEASE_OWNER="${PIXENEOS_RELEASE_OWNER:-0cwa}"
+  PIXENEOS_RELEASE_REPOSITORY="${PIXENEOS_RELEASE_REPOSITORY:-PixeneOS}"
+}
+
 # Function to setup the environment for the my-avbroot-setup script
 function my_avbroot_setup() {
+  resolve_release_repository
+
   # Paths
   local setup_script="${WORKDIR}/tools/my-avbroot-setup/patch.py"
   local magisk_path="${WORKDIR}/modules/magisk.apk"
-  local location_path="${DOMAIN}/${USER}/${REPOSITORY}/releases/download/${VERSION[GRAPHENEOS]}/${OUTPUTS[PATCHED_OTA]}"
+  local location_path
+
+  if [[ -n "${PIXENEOS_RELEASE_BASE_URL}" ]]; then
+    location_path="${PIXENEOS_RELEASE_BASE_URL%/}/${OUTPUTS[PATCHED_OTA]}"
+  else
+    location_path="${DOMAIN}/${PIXENEOS_RELEASE_OWNER}/${PIXENEOS_RELEASE_REPOSITORY}/releases/download/${VERSION[GRAPHENEOS]}/${OUTPUTS[PATCHED_OTA]}"
+  fi
 
   # Add support to pass env-vars to the setup script for passphrase in the CI/CD pipeline
   echo -e "Running script modifications..."
 
-  # Update location path to use GitHub releases
-  sed -i -e "s|generate_update_info(update_info, args.output.name)|generate_update_info(update_info, '${location_path}')|" "${setup_script}"
+  # Update location path to use GitHub releases. Use Python's repr() for the
+  # inserted URL so shell/sed metacharacters in user-provided URLs remain data.
+  python3 - "${setup_script}" "${location_path}" <<'PY'
+import pathlib
+import sys
+
+setup_script = pathlib.Path(sys.argv[1])
+location_path = sys.argv[2]
+old = "generate_update_info(update_info, args.output.name)"
+new = f"generate_update_info(update_info, {location_path!r})"
+
+text = setup_script.read_text()
+if old not in text:
+    raise SystemExit(f"Expected update-info marker not found in {setup_script}")
+
+setup_script.write_text(text.replace(old, new, 1))
+PY
 }
 
 # Function to setup the environment variables and paths for patching the OTA
@@ -365,7 +424,8 @@ function url_constructor() {
   echo -e "Constructing URL for \`${repository}\` as \`${repository}\` is non-existent at \`${WORKDIR}\`..."
   # `my-avbroot-setup` is git repository
   if [[ "${repository}" == "my-avbroot-setup" ]]; then
-    URL="${DOMAIN}/0cwa/${repository}"
+    URL="${PIXENEOS_AVBROOT_SETUP_SOURCE:-${DOMAIN}/0cwa/${repository}}"
+    SIGNATURE_URL=""
   else
     # Afsr, avbroot, and custota-tool are binaries and are platform dependent. Modules are zipped files.
     if [[ "${repository}" == "afsr" || "${repository}" == "avbroot" || "${repository}" == "custota-tool" ]]; then
@@ -479,8 +539,15 @@ function make_directories() {
 function generate_ota_info() {
   # Detect build flavor
   local flavor=$([[ ${ADDITIONALS[ROOT]} == 'true' ]] && echo "magisk-${VERSION[MAGISK]}" || echo "rootless")
+  local debug_suffix=""
+
+  if [[ "${ADDITIONALS[DEBUG]}" == 'true' ]]; then
+    debug_suffix="-debug-adb"
+  fi
+
   # e.g. bluejay-2024082200-rootless-abc12345-dirty.zip
-  OUTPUTS[PATCHED_OTA]="${DEVICE_NAME}-${VERSION[GRAPHENEOS]}-${flavor}-$(git rev-parse --short HEAD)$(dirty_suffix).zip"
+  # Debug builds are intentionally labeled, e.g. bluejay-2024082200-rootless-debug-adb-abc12345.zip
+  OUTPUTS[PATCHED_OTA]="${DEVICE_NAME}-${VERSION[GRAPHENEOS]}-${flavor}${debug_suffix}-$(git rev-parse --short HEAD)$(dirty_suffix).zip"
 }
 
 function check_toml_env() {
