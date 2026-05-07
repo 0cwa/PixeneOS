@@ -1,6 +1,15 @@
 #!/bin/bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2024-2026 PixeneOS contributors
 
 if git diff --cached --name-only | grep -q '^\.keys/'; then
   echo -e "Error: The \`.keys\` directory should not be committed as it contains your AVB keys!"
+  exit 1
+fi
+
+if [[ -x "src/scan_secrets.sh" ]]; then
+  src/scan_secrets.sh --staged
+else
+  echo -e "Error: src/scan_secrets.sh is missing or not executable; cannot run the PixeneOS secrets scan."
   exit 1
 fi

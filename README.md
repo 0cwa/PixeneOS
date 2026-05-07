@@ -268,6 +268,15 @@ PixeneOS can be run on your local machine. A Linux based machine is preferred.
 
 `INTERACTIVE_MODE`, by default is set to `true` that calls `check_toml_env` function to check the existence of `env.toml`. If the file exist, it will read the `env.toml` file and set the environment variables accordingly. If the `env.toml` is non-existent, ignored. If it exist, and the format is wrong, the script exits with an error.
 
+### Release URL and source overrides
+
+By default, generated Custota metadata points patched OTA downloads at GitHub Releases for the current repository. These environment variables can override that behavior:
+
+- `PIXENEOS_RELEASE_OWNER`: GitHub release asset owner. Defaults to the owner from `GITHUB_REPOSITORY`, then `0cwa`.
+- `PIXENEOS_RELEASE_REPOSITORY`: GitHub release asset repository. Defaults to the repository from `GITHUB_REPOSITORY`, then `PixeneOS`.
+- `PIXENEOS_RELEASE_BASE_URL`: Full release asset URL prefix, excluding the OTA filename. When set, generated metadata appends the patched OTA filename to this prefix instead of using the default GitHub Releases URL. If you use alternate hosting, publish both the patched OTA and its `.csig` signature at the same prefix.
+- `PIXENEOS_AVBROOT_SETUP_SOURCE`: Custom clone URL for the `my-avbroot-setup` helper repository. Defaults to `https://github.com/0cwa/my-avbroot-setup`.
+
 To make the patched OTA available to the device, it needs to be hosted on the server. PixeneOS uses GitHub for pushing updates, handled by [release.yml](.github/workflows/release.yml).
 
 To set up automated release, add the following variables in GitHub secrets:
@@ -310,10 +319,10 @@ To set up automated release, add the following variables in GitHub secrets:
   . src/util_functions.sh && generate_keys
   ```
 
-  This command will generate the AVB keys and store them in `.keys` directory.
+  This command will generate the AVB/OTA signing files under the local `.keys/` directory (`avb.key`, `ota.key`, `ota.crt`, and `avb_pkmd.bin`).
 
 > [!WARNING]
-> For security reasons, `.keys` directory will **not** be pushed to your GitHub repository.> Execute `setup_hooks.sh` to install a pre-commit hook that will prevent `.keys` directory from being pushed.
+> Treat `.keys/` and the generated signing files as private local material. The repository ignores `.keys/` and common key filenames; execute `src/setup_hooks.sh` to install the pre-commit hook. The hook preserves the `.keys/` guard and runs the PixeneOS secrets scanner. Install `gitleaks` as well for full standard scanner coverage matching CI.
 
 - To create and make the release:
 
@@ -363,8 +372,9 @@ Check the [FAQs](docs/FAQ.md) to learn about common issues faced by users and th
 
 ## License
 
-This project is licensed under the `MIT`. For more information, please refer to the [LICENSE](LICENSE) file.
-Dependencies are downloaded from their respective repositories and are licensed under their respective licenses. Refer to the respective repositories for more information.
+Per [ADR-0003](docs/planning/decisions/ADR-0003-license-agpl.md), new project-authored PixeneOS code is licensed under `AGPL-3.0-or-later`. Project-authored source files marked with AGPL SPDX identifiers follow that notice; see the root [LICENSE](LICENSE) file for the license text.
+
+Third-party-derived code, dependencies, modules, tools, release artifacts, and downloaded components retain their upstream licenses and copyright notices. This repository previously used MIT-oriented root license wording with `Copyright (c) 2024 Pa1NarK`; that historical notice is preserved in `LICENSE` for provenance rather than silently erased.
 
 ## Credits
 

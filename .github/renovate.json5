@@ -7,7 +7,7 @@
   customManagers: [
     {
       customType: "regex",
-      managerFilePatterns: ["src/declarations.sh"],
+      managerFilePatterns: ["/src/declarations.sh/"],
       matchStrings: [
         'VERSION\\[AVBROOT\\]=\\"\\$\\{VERSION\\[AVBROOT\\]:-(?<currentValue>.*?)\\}"',
       ],
@@ -16,7 +16,7 @@
     },
     {
       customType: "regex",
-      managerFilePatterns: ["src/declarations.sh"],
+      managerFilePatterns: ["/src/declarations.sh/"],
       matchStrings: [
         'VERSION\\[AVBROOT_SETUP\\]=\\"(?<currentDigest>.*?)\\"',
       ],
@@ -27,7 +27,7 @@
     },
     {
       customType: "regex",
-      managerFilePatterns: ["src/declarations.sh"],
+      managerFilePatterns: ["/src/declarations.sh/"],
       matchStrings: [
         'VERSION\\[CUSTOTA\\]=\\"\\$\\{VERSION\\[CUSTOTA\\]:-(?<currentValue>.*?)\\}"',
       ],
@@ -36,7 +36,7 @@
     },
     {
       customType: "regex",
-      managerFilePatterns: ["src/declarations.sh"],
+      managerFilePatterns: ["/src/declarations.sh/"],
       matchStrings: [
         'VERSION\\[ALTERINSTALLER\\]=\\"\\$\\{VERSION\\[ALTERINSTALLER\\]:-(?<currentValue>.*?)\\}"',
       ],
@@ -45,7 +45,7 @@
     },
     {
       customType: "regex",
-      managerFilePatterns: ["src/declarations.sh"],
+      managerFilePatterns: ["/src/declarations.sh/"],
       matchStrings: [
         'VERSION\\[MSD\\]=\\"\\$\\{VERSION\\[MSD\\]:-(?<currentValue>.*?)\\}"',
       ],
@@ -54,7 +54,7 @@
     },
     {
       customType: "regex",
-      managerFilePatterns: ["src/declarations.sh"],
+      managerFilePatterns: ["/src/declarations.sh/"],
       matchStrings: [
         'VERSION\\[BCR\\]=\\"\\$\\{VERSION\\[BCR\\]:-(?<currentValue>.*?)\\}"',
       ],
@@ -63,7 +63,7 @@
     },
     {
       customType: "regex",
-      managerFilePatterns: ["src/declarations.sh"],
+      managerFilePatterns: ["/src/declarations.sh/"],
       matchStrings: [
         'VERSION\\[OEMUNLOCKONBOOT\\]=\\"\\$\\{VERSION\\[OEMUNLOCKONBOOT\\]:-(?<currentValue>.*?)\\}"',
       ],
@@ -72,7 +72,7 @@
     },
     {
       customType: "regex",
-      managerFilePatterns: ["src/declarations.sh"],
+      managerFilePatterns: ["/src/declarations.sh/"],
       matchStrings: [
         'VERSION\\[AFSR\\]=\\"\\$\\{VERSION\\[AFSR\\]:-(?<currentValue>.*?)\\}"',
       ],
