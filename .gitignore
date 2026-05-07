@@ -12,3 +12,6 @@
 
 # Python virtual environment
 venv
+.ruff_cache/
+__pycache__/
+*.py[cod]
