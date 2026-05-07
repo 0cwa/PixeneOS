@@ -25,6 +25,12 @@ DOMAIN="https://github.com"
 REPOSITORY="PixeneOS" # GitHub repository name
 USER="0cwa"    # GitHub username
 
+# Release asset owner/repository. These are resolved at use time so env.toml
+# values loaded after this file, GitHub Actions context, and defaults all
+# participate safely.
+PIXENEOS_RELEASE_OWNER="${PIXENEOS_RELEASE_OWNER:-}"
+PIXENEOS_RELEASE_REPOSITORY="${PIXENEOS_RELEASE_REPOSITORY:-}"
+
 # Application version variables
 VERSION[AFSR]="${VERSION[AFSR]:-1.0.4}"
 VERSION[ALTERINSTALLER]="${VERSION[ALTERINSTALLER]:-2.3}"

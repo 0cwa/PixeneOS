@@ -262,12 +262,29 @@ function patch_ota() {
   deactivate
 }
 
+function resolve_release_repository() {
+  local github_repository="${GITHUB_REPOSITORY:-}"
+
+  if [[ -z "${PIXENEOS_RELEASE_OWNER}" && "${github_repository}" == */* ]]; then
+    PIXENEOS_RELEASE_OWNER="${github_repository%%/*}"
+  fi
+
+  if [[ -z "${PIXENEOS_RELEASE_REPOSITORY}" && "${github_repository}" == */* ]]; then
+    PIXENEOS_RELEASE_REPOSITORY="${github_repository#*/}"
+  fi
+
+  PIXENEOS_RELEASE_OWNER="${PIXENEOS_RELEASE_OWNER:-pixincreate}"
+  PIXENEOS_RELEASE_REPOSITORY="${PIXENEOS_RELEASE_REPOSITORY:-PixeneOS}"
+}
+
 # Function to setup the environment for the my-avbroot-setup script
 function my_avbroot_setup() {
+  resolve_release_repository
+
   # Paths
   local setup_script="${WORKDIR}/tools/my-avbroot-setup/patch.py"
   local magisk_path="${WORKDIR}/modules/magisk.apk"
-  local location_path="${DOMAIN}/${USER}/${REPOSITORY}/releases/download/${VERSION[GRAPHENEOS]}/${OUTPUTS[PATCHED_OTA]}"
+  local location_path="${DOMAIN}/${PIXENEOS_RELEASE_OWNER}/${PIXENEOS_RELEASE_REPOSITORY}/releases/download/${VERSION[GRAPHENEOS]}/${OUTPUTS[PATCHED_OTA]}"
 
   # Add support to pass env-vars to the setup script for passphrase in the CI/CD pipeline
   echo -e "Running script modifications..."
