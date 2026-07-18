@@ -358,7 +358,102 @@ test_fdroid_missing_or_untracked_inputs_fail_closed() {
   LOCKED_INPUTS_VALID="false"
   assert_patch_fails_before_execution "untracked locked inputs"
   assert_prepare_stages "untracked locked inputs"
+
+  reset_fixture fdroid-missing-module-tool
+  enable_fdroid_fixture
+  rm -f -- "${WORKDIR}/tools/my-avbroot-setup/module-tool.py"
+  assert_patch_fails_before_execution "missing locked module tool"
+  assert_prepare_stages "missing locked module tool"
 }
+
+test_fdroid_preparation_precedes_ota_extraction() (
+  local event_log
+  local -a expected_events=(prepare-start prepare-complete extract)
+  local -a actual_events=()
+
+  reset_fixture fdroid-before-extraction
+  enable_fdroid_fixture
+  rm -f -- \
+    "${WORKDIR}/extracted/avb_pkmd.bin" \
+    "${WORKDIR}/extracted/ota/META-INF/com/android/otacert"
+  event_log="${WORKDIR}/events"
+
+  prepare_fdroid_privileged_extension() {
+    printf '%s\n' prepare-start >>"${event_log}"
+    printf '%s\n' prepare-complete >>"${event_log}"
+  }
+
+  extract_official_keys() {
+    [[ "$(tail -n 1 -- "${event_log}")" == 'prepare-complete' ]] ||
+      fail "OTA extraction started before locked preparation completed"
+    printf '%s\n' extract >>"${event_log}"
+    mkdir -p -- "${WORKDIR}/extracted/ota/META-INF/com/android"
+    touch -- \
+      "${WORKDIR}/extracted/avb_pkmd.bin" \
+      "${WORKDIR}/extracted/ota/META-INF/com/android/otacert"
+  }
+
+  run_patch
+  mapfile -t actual_events <"${event_log}"
+  assert_array_equals \
+    expected_events actual_events "F-Droid before OTA extraction"
+)
+
+test_fdroid_preparation_failure_prevents_ota_extraction() (
+  local event_log
+
+  reset_fixture fdroid-failure-before-extraction
+  enable_fdroid_fixture
+  rm -f -- \
+    "${WORKDIR}/extracted/avb_pkmd.bin" \
+    "${WORKDIR}/extracted/ota/META-INF/com/android/otacert"
+  event_log="${WORKDIR}/events"
+
+  prepare_fdroid_privileged_extension() {
+    printf '%s\n' prepare-failed >>"${event_log}"
+    return 1
+  }
+
+  extract_official_keys() {
+    printf '%s\n' extract >>"${event_log}"
+  }
+
+  assert_patch_fails_before_execution "locked preparation before extraction"
+  [[ "$(<"${event_log}")" == 'prepare-failed' ]] ||
+    fail "OTA extraction ran after locked preparation failed"
+)
+
+test_fdroid_disabled_preserves_legacy_extraction_order() (
+  local event_log
+  local -a expected_events=(extract prepare)
+  local -a actual_events=()
+
+  reset_fixture fdroid-disabled-extraction
+  set_default_expected_args
+  rm -f -- \
+    "${WORKDIR}/extracted/avb_pkmd.bin" \
+    "${WORKDIR}/extracted/ota/META-INF/com/android/otacert"
+  event_log="${WORKDIR}/events"
+
+  extract_official_keys() {
+    printf '%s\n' extract >>"${event_log}"
+    mkdir -p -- "${WORKDIR}/extracted/ota/META-INF/com/android"
+    touch -- \
+      "${WORKDIR}/extracted/avb_pkmd.bin" \
+      "${WORKDIR}/extracted/ota/META-INF/com/android/otacert"
+  }
+
+  prepare_fdroid_privileged_extension() {
+    printf '%s\n' prepare >>"${event_log}"
+  }
+
+  run_patch
+  mapfile -t actual_events <"${event_log}"
+  assert_array_equals \
+    expected_events actual_events "disabled F-Droid extraction order"
+  assert_array_equals \
+    EXPECTED_ARGS CAPTURED_ARGS "disabled F-Droid missing-key arguments"
+)
 
 test_fdroid_preparation_stages_fail_closed() {
   local failure
@@ -418,6 +513,9 @@ test_all_modules_can_be_disabled
 test_special_cases_remain_available
 test_fdroid_locked_preparation_and_arguments
 test_fdroid_missing_or_untracked_inputs_fail_closed
+test_fdroid_preparation_precedes_ota_extraction
+test_fdroid_preparation_failure_prevents_ota_extraction
+test_fdroid_disabled_preserves_legacy_extraction_order
 test_fdroid_preparation_stages_fail_closed
 test_fdroid_locked_paths_survive_cleanup_and_quoting
 test_fdroid_enabled_does_not_reuse_legacy_output_marker

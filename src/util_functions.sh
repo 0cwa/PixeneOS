@@ -281,10 +281,21 @@ function patch_ota() {
   local grapheneos_otacert="${WORKDIR}/extracted/ota/META-INF/com/android/otacert"
   local magisk_path="${WORKDIR}/modules/magisk.apk"
   local my_avbroot_setup="${WORKDIR}/tools/my-avbroot-setup"
+  local -a locked_module_args=()
 
   # Activate the virtual environment
   if [ -z "${VIRTUAL_ENV}" ]; then
     enable_venv
+  fi
+
+  # Locked module artifacts must be resolved, fetched, and verified before any
+  # OTA contents are unpacked. Keep the disabled path on its legacy ordering.
+  if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' ]]; then
+    rm -rf -- "${WORKDIR}/extracted/extracts/"
+    if ! prepare_fdroid_privileged_extension \
+      locked_module_args "${my_avbroot_setup}"; then
+      return 1
+    fi
   fi
 
   # Extract the official public keys and certificates if not found
@@ -319,14 +330,18 @@ function patch_ota() {
     args+=("--pass-avb-env-var" "PASSPHRASE_AVB")
     args+=("--pass-ota-env-var" "PASSPHRASE_OTA")
 
-    # Clear the extraction scratch tree before locked acquisition. A
-    # caller-selected cache below this tree must not be verified and then
-    # deleted before patch.py consumes it.
-    rm -rf -- "${WORKDIR}/extracted/extracts/"
+    # Preserve the legacy cleanup ordering when locked modules are disabled.
+    # Enabled builds already cleared this tree before locked acquisition so a
+    # caller-selected cache below it remains available to patch.py.
+    if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" != 'true' ]]; then
+      rm -rf -- "${WORKDIR}/extracted/extracts/"
+    fi
 
     # Modules and their signatures
     append_enabled_module_arguments args
-    if ! prepare_fdroid_privileged_extension args "${my_avbroot_setup}"; then
+    if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' ]]; then
+      args+=("${locked_module_args[@]}")
+    elif ! prepare_fdroid_privileged_extension args "${my_avbroot_setup}"; then
       return 1
     fi
 
