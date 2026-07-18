@@ -45,6 +45,7 @@ env:
   GRAPHENEOS_UPDATE_CHANNEL: ${{ github.event.inputs.update-channel }}
   RUST_BACKTRACE: short
   RUSTUP_MAX_RETRIES: 10
+  GH_TOKEN: ${{ secrets.GH_TOKEN }} #Optional, In order to cancel jobs instead of erroring out when files already exist
 
 jobs:
   build:
@@ -67,7 +68,7 @@ jobs:
           fi
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # Allow for switching to github-pages branch
           fetch-depth: 0
@@ -166,7 +167,7 @@ jobs:
       - name: Setup Git
         run: |
           # Configure git for pushing changes
-          git config --global user.email ${{ secrets.EMAIL }} && git config --global user.name 0cwa
+          git config --global user.email ${{ secrets.EMAIL }} && git config --global user.name "${{ github.repository_owner }}"
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@master
@@ -183,9 +184,21 @@ jobs:
 
       - name: Setup Environment variables
         run: |
-          echo "KEYS_AVB_BASE64=${{ secrets.AVB_KEY }}" >> $GITHUB_ENV
-          echo "KEYS_CERT_OTA_BASE64=${{ secrets.CERT_OTA }}" >> $GITHUB_ENV
-          echo "KEYS_OTA_BASE64=${{ secrets.OTA_KEY }}" >> $GITHUB_ENV
+          echo "KEYS_AVB_BASE64<<EOF" >> $GITHUB_ENV
+          echo "${{ secrets.AVB_KEY }}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          echo "KEYS_CERT_OTA_BASE64<<EOF" >> $GITHUB_ENV
+          echo "${{ secrets.CERT_OTA }}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          echo "KEYS_OTA_BASE64<<EOF" >> $GITHUB_ENV
+          echo "${{ secrets.OTA_KEY }}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Block debug ADB release publishing
+        if: github.event.inputs.allow_unauthorized_adb == 'true' && github.event.inputs.release-type != 'build-only'
+        run: |
+          echo "::error::Debug ADB builds must use release-type=build-only. They are labeled debug-adb and must not update normal releases or OTA metadata."
+          exit 1
 
       - name: Patch OTA
         shell: bash
@@ -215,7 +228,7 @@ jobs:
 
       - name: Make Release
         uses: softprops/action-gh-release@v3
-        if: github.event.inputs.release-type != 'build-only'
+        if: github.event.inputs.release-type != 'build-only' && github.event.inputs.allow_unauthorized_adb != 'true'
         with:
           body_path: ${{ github.workspace }}-CHANGELOG.txt
           files: |
@@ -226,7 +239,7 @@ jobs:
 
       - name: Publish OTA to server
         shell: bash
-        if: github.event.inputs.release-type != 'build-only'
+        if: github.event.inputs.release-type != 'build-only' && github.event.inputs.allow_unauthorized_adb != 'true'
         run: |
           CURRENT_COMMIT=$(git rev-parse --short HEAD)
           FLAVOR=("magisk" "rootless")

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2024-2026 PixeneOS contributors
 
 # Contains the functions to fetch the required files. In short, this takes care of downloading the OTA, Magisk, and other dependencies.
 
