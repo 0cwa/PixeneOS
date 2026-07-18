@@ -64,8 +64,10 @@ function verify_downloads() {
     return $?
   fi
 
-  # Check if signatures are present for all downloaded files except for `my-avbroot-setup` and `magisk`
-  if [[ ! -n "$(ls "${WORKDIR}/signatures/"*.sig 2>/dev/null)" && "${tool}" != "my-avbrot-setup" && "${tool}" != "magisk" ]]; then
+  # Require the matching signature for every downloaded artifact except for
+  # `my-avbroot-setup` and `magisk`.
+  if [[ "${tool}" != "my-avbroot-setup" && "${tool}" != "magisk" &&
+    ! -f "${WORKDIR}/signatures/${tool}.zip.sig" ]]; then
     echo -e "Error: Signature for \`${tool}\` not found in \`${WORKDIR}/signatures\`\n"
     auto_retry_check
     return $?

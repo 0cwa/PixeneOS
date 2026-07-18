@@ -99,6 +99,39 @@ function flag_check() {
   fi
 }
 
+# Append enabled my-avbroot-setup modules while preserving the historical
+# argument order: all module archives first, followed by their signatures.
+function append_enabled_module_arguments() {
+  local args_name="${1}"
+  local -n args_ref="${args_name}"
+  local entry module flag
+  local -a enabled_modules=()
+  local -a module_entries=(
+    "custota:CUSTOTA"
+    "msd:MSD"
+    "bcr:BCR"
+    "oemunlockonboot:OEMUNLOCKONBOOT"
+    "alterinstaller:ALTERINSTALLER"
+  )
+
+  for entry in "${module_entries[@]}"; do
+    module="${entry%%:*}"
+    flag="${entry#*:}"
+
+    if [[ "${ADDITIONALS[${flag}]}" == 'true' ]]; then
+      enabled_modules+=("${module}")
+    fi
+  done
+
+  for module in "${enabled_modules[@]}"; do
+    args_ref+=("--module-${module}" "${WORKDIR}/modules/${module}.zip")
+  done
+
+  for module in "${enabled_modules[@]}"; do
+    args_ref+=("--module-${module}-sig" "${WORKDIR}/signatures/${module}.zip.sig")
+  done
+}
+
 # Function to create and make the release called by main script
 function create_and_make_release() {
   if [[ ! -d $WORKDIR ]]; then
@@ -205,8 +238,6 @@ function patch_ota() {
     extract_official_keys
   fi
 
-  # At present, the script lacks the ability to disable certain modules.
-  # Everything is hardcoded to be enabled by default.
   if ls "${ota_zip}.patched*.zip" 1>/dev/null 2>&1; then
     echo -e "File ${ota_zip}.pathed.zip already exists in local. Patch skipped."
   else
@@ -230,19 +261,8 @@ function patch_ota() {
     args+=("--pass-avb-env-var" "PASSPHRASE_AVB")
     args+=("--pass-ota-env-var" "PASSPHRASE_OTA")
 
-    # Modules
-    args+=("--module-custota" "${WORKDIR}/modules/custota.zip")
-    args+=("--module-msd" "${WORKDIR}/modules/msd.zip")
-    args+=("--module-bcr" "${WORKDIR}/modules/bcr.zip")
-    args+=("--module-oemunlockonboot" "${WORKDIR}/modules/oemunlockonboot.zip")
-    args+=("--module-alterinstaller" "${WORKDIR}/modules/alterinstaller.zip")
-
-    # Module signatures
-    args+=("--module-custota-sig" "${WORKDIR}/signatures/custota.zip.sig")
-    args+=("--module-msd-sig" "${WORKDIR}/signatures/msd.zip.sig")
-    args+=("--module-bcr-sig" "${WORKDIR}/signatures/bcr.zip.sig")
-    args+=("--module-oemunlockonboot-sig" "${WORKDIR}/signatures/oemunlockonboot.zip.sig")
-    args+=("--module-alterinstaller-sig" "${WORKDIR}/signatures/alterinstaller.zip.sig")
+    # Modules and their signatures
+    append_enabled_module_arguments args
 
     # Add debug module if unauthorized ADB is enabled
     if [[ "${ADDITIONALS[DEBUG]}" == 'true' ]]; then

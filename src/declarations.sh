@@ -68,11 +68,16 @@ GRAPHENEOS[OTA_TARGET]="${GRAPHENEOS[OTA_TARGET]:-}"             # Will be const
 
 # Modules
 ADDITIONALS[AFSR]="${ADDITIONALS[AFSR]:-true}"                       # Android File system repack
-ADDITIONALS[ALTERINSTALLER]="${ADDITIONALS[ALTERINSTALLER]:-true}"   # Spoof Android package manager installer fields
-ADDITIONALS[BCR]="${ADDITIONALS[BCR]:-true}"                         # Basic Call Recorder
-ADDITIONALS[CUSTOTA]="${ADDITIONALS[CUSTOTA]:-true}"                 # Custom OTA Updater app
-ADDITIONALS[MSD]="${ADDITIONALS[MSD]:-true}"                         # Mass Storage Device on USB
-ADDITIONALS[OEMUNLOCKONBOOT]="${ADDITIONALS[OEMUNLOCKONBOOT]:-true}" # toggle OEM unlock button on boot
+# Spoof Android package manager installer fields
+ADDITIONALS[ALTERINSTALLER]="${ADDITIONALS_ALTERINSTALLER:-${ADDITIONALS[ALTERINSTALLER]:-true}}"
+# Basic Call Recorder
+ADDITIONALS[BCR]="${ADDITIONALS_BCR:-${ADDITIONALS[BCR]:-true}}"
+# Custom OTA Updater app
+ADDITIONALS[CUSTOTA]="${ADDITIONALS_CUSTOTA:-${ADDITIONALS[CUSTOTA]:-true}}"
+# Mass Storage Device on USB
+ADDITIONALS[MSD]="${ADDITIONALS_MSD:-${ADDITIONALS[MSD]:-true}}"
+# Toggle OEM unlock button on boot
+ADDITIONALS[OEMUNLOCKONBOOT]="${ADDITIONALS_OEMUNLOCKONBOOT:-${ADDITIONALS[OEMUNLOCKONBOOT]:-true}}"
 # Tools
 ADDITIONALS[AVBROOT]="${ADDITIONALS[AVBROOT]:-true}"                   # Android Verified Boot Root
 ADDITIONALS[CUSTOTA_TOOL]="${ADDITIONALS[CUSTOTA_TOOL]:-true}"         # Custom OTA Tool
