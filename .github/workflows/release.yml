@@ -276,7 +276,15 @@ jobs:
             echo -e "Deployed version (${{ env.GRAPHENEOS_VERSION }}) is same as current GrapheneOS release (${{ env.GRAPHENEOS_VERSION }}).\nUpdate skipped."
           fi
 
-          # Commit and push the changes if the working directory is clean
+          # A force-publish can replace the release asset without changing its URL.
+          # Always update the rebuild marker so gh-pages is pushed and GitHub Pages
+          # republishes the JSON that points to the most recently published asset.
+          if [[ "${{ github.event.inputs.release-type }}" == "force-publish" ]]; then
+            printf 'force-publish run %s (attempt %s)\n' "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" > .tmp
+            git add .tmp
+          fi
+
+          # Commit and push the changes if the working directory has changes
           if ! git diff-index --quiet HEAD; then
             git commit -m "release("${CURRENT_COMMIT}"): bump GrapheneOS version to ${{ env.GRAPHENEOS_VERSION }}"
             git push origin gh-pages
