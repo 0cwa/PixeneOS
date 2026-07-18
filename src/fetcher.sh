@@ -91,9 +91,10 @@ function download_ota() {
   # Download if not downloaded already
   if [ ! -f "${ota}" ]; then
     echo -e "Downloading OTA from: ${GRAPHENEOS[OTA_URL]}...\nPlease be patient while the download happens."
-    curl -sL "${GRAPHENEOS[OTA_URL]}" --output "${ota}"
+    curl -sLf "${GRAPHENEOS[OTA_URL]}" --output "${ota}"
     echo -e "OTA downloaded to: \`${ota}\`\n"
   else
     echo -e "OTA is already downloaded in: \`${ota}\`\n"
   fi
+  verify_rom_ota_digest "${ota}"
 }

@@ -644,6 +644,8 @@ function make_directories() {
 }
 
 function generate_ota_info() {
+  validate_device_name
+
   # Detect build flavor
   local flavor=$([[ ${ADDITIONALS[ROOT]} == 'true' ]] && echo "magisk-${VERSION[MAGISK]}" || echo "rootless")
   local debug_suffix=""
@@ -653,11 +655,9 @@ function generate_ota_info() {
   fi
 
   module_selection_fingerprint >/dev/null
-  local fingerprint_short="${MODULE_SELECTION_FINGERPRINT:0:16}"
-
   # Debug builds are intentionally labeled. The stable selection fingerprint
   # prevents otherwise identical ROM/profile variants from colliding.
-  OUTPUTS[PATCHED_OTA]="${DEVICE_NAME}-${VERSION[GRAPHENEOS]}-${flavor}${debug_suffix}-${fingerprint_short}-$(git rev-parse --short HEAD)$(dirty_suffix).zip"
+  OUTPUTS[PATCHED_OTA]="${DEVICE_NAME}-${VERSION[GRAPHENEOS]}-${flavor}${debug_suffix}-${MODULE_SELECTION_FINGERPRINT}-$(git rev-parse --short HEAD)$(dirty_suffix).zip"
 }
 
 function check_toml_env() {

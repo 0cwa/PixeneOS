@@ -65,7 +65,7 @@ assert_dispatch_default() {
     in_input && $0 ~ "^[[:space:]]{6}[A-Za-z0-9_-]+:[[:space:]]*$" { exit }
     in_input && $0 ~ "^[[:space:]]+default:[[:space:]]*" {
       sub(/^.*default:[[:space:]]*/, "")
-      gsub(/[[:space:]\047\"]/, "")
+      gsub(/[[:space:]\047"]/, "")
       print
       exit
     }
@@ -120,6 +120,14 @@ test_reusable_workflow() {
     "${REUSABLE}" \
     'enforce_output_policy' \
     "shared workflow must enforce policy before release or upload"
+  assert_contains \
+    "${REUSABLE}" \
+    'enforce_publication_evidence' \
+    "shared workflow must enforce publication evidence"
+  assert_not_contains \
+    "${REUSABLE}" \
+    'actions/upload-artifact@' \
+    "local-unpublished outputs must not be uploaded"
   assert_not_contains \
     "${REUSABLE}" \
     '(^|[[:space:]])ref:[[:space:]]*['\"]?lineage['\"]?([[:space:]#]|$)' \

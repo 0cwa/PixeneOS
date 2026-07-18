@@ -17,6 +17,7 @@ function fetch_grapheneos_ota_metadata() {
   fi
 
   VERSION[GRAPHENEOS]="${GRAPHENEOS_VERSION:-${latest_version}}"
+  ROM_OTA_SHA256=""
   GRAPHENEOS[OTA_TARGET]="${DEVICE_NAME}-${GRAPHENEOS[UPDATE_TYPE]}-${latest_version}"
   GRAPHENEOS[OTA_URL]="${ROM_PROFILE[OTA_BASE_URL]}/${GRAPHENEOS[OTA_TARGET]}.zip"
 }
@@ -46,9 +47,12 @@ try:
     )
     filename = item["filename"]
     url = item["url"]
+    sha256 = item["sha256"]
 except (KeyError, IndexError, StopIteration, TypeError, ValueError, json.JSONDecodeError):
     raise SystemExit(1)
 if not isinstance(filename, str) or not re.fullmatch(r"[A-Za-z0-9._+-]+[.]zip", filename):
+    raise SystemExit(1)
+if not isinstance(sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", sha256):
     raise SystemExit(1)
 if not re.fullmatch(r"[a-z0-9_]+", device) or f"-{device}-" not in filename:
     raise SystemExit(1)
@@ -62,12 +66,15 @@ if (
     raise SystemExit(1)
 print(filename)
 print(url)
+print(sha256)
 ' "${GRAPHENEOS[UPDATE_CHANNEL]}" "${DEVICE_NAME}")" || {
     echo "Error: LineageOS returned invalid release metadata." >&2
     return 1
   }
   filename="${parsed%%$'\n'*}"
-  ota_url="${parsed#*$'\n'}"
+  parsed="${parsed#*$'\n'}"
+  ota_url="${parsed%%$'\n'*}"
+  ROM_OTA_SHA256="${parsed#*$'\n'}"
   latest_version="$(printf '%s\n' "${filename}" | sed -nE 's/.*(^|[^0-9])([0-9]{8})([^0-9]|$).*/\2/p')"
   if [[ ! "${latest_version}" =~ ^[0-9]{8}$ ]]; then
     echo "Error: LineageOS filename lacks an unambiguous build date." >&2
@@ -80,6 +87,8 @@ print(url)
 }
 
 function fetch_rom_ota_metadata() {
+  validate_device_name || return 1
+
   case "${ROM_PROFILE[PROVIDER]}" in
   grapheneos) fetch_grapheneos_ota_metadata ;;
   lineageos) fetch_lineageos_ota_metadata ;;
@@ -88,4 +97,22 @@ function fetch_rom_ota_metadata() {
     return 1
     ;;
   esac
+}
+
+function verify_rom_ota_digest() {
+  local ota_path="${1}"
+  local actual_digest
+
+  if [[ "${ROM_PROFILE[PROVIDER]}" != 'lineageos' ]]; then
+    return 0
+  fi
+  if [[ ! "${ROM_OTA_SHA256}" =~ ^[0-9a-f]{64}$ ]]; then
+    echo "Error: LineageOS OTA metadata lacks a valid SHA-256." >&2
+    return 1
+  fi
+  actual_digest="$(sha256sum -- "${ota_path}" | awk '{print $1}')" || return 1
+  if [[ "${actual_digest}" != "${ROM_OTA_SHA256}" ]]; then
+    echo "Error: downloaded LineageOS OTA SHA-256 does not match metadata." >&2
+    return 1
+  fi
 }

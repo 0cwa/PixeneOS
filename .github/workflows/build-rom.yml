@@ -57,6 +57,7 @@ env:
   RUST_BACKTRACE: short
   RUSTUP_MAX_RETRIES: 10
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  RELEASE_TYPE: ${{ inputs.release-type }}
 
 jobs:
   build:
@@ -71,12 +72,13 @@ jobs:
           ADDITIONALS_DEBUG: ${{ inputs.allow-unauthorized-adb }}
           ADDITIONALS_MAS_COMPATIBLE_SEPOLICY: ${{ inputs.compatible-sepolicy-patching }}
           ADDITIONALS_ROOT: ${{ inputs.root }}
+          MAGISK_PREINIT_REQUEST: ${{ inputs.magisk-preinit-device }}
         run: |
-          if [[ "${ADDITIONALS_ROOT}" == "true" && -z "${{ inputs.magisk-preinit-device }}" ]]; then
+          if [[ "${ADDITIONALS_ROOT}" == "true" && -z "${MAGISK_PREINIT_REQUEST}" ]]; then
             echo "::error::magisk-preinit-device is required for rooted builds"
             exit 1
           fi
-          case "${{ inputs.release-type }}" in
+          case "${RELEASE_TYPE}" in
             default|build-only|force-publish) ;;
             *) echo "::error::Unknown release type"; exit 1 ;;
           esac
@@ -147,22 +149,37 @@ jobs:
       - name: Record build metadata
         shell: bash
         run: |
+          selection_metadata="${OUTPUTS_PATCHED_OTA}.selection.json"
+          python3 - \
+            "${selection_metadata}" \
+            "${ROM_FAMILY}" \
+            "${DEVICE_NAME}" \
+            "${MODULE_SELECTION_FINGERPRINT}" \
+            "${OUTPUT_SCOPE}" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          path, rom_family, device, fingerprint, output_scope = sys.argv[1:]
+          data = {
+              "device": device,
+              "module_selection_fingerprint": fingerprint,
+              "output_scope": output_scope,
+              "rom_family": rom_family,
+              "schema_version": 1,
+          }
+          pathlib.Path(path).write_text(
+              json.dumps(data, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          echo "SELECTION_METADATA=${selection_metadata}" >> "${GITHUB_ENV}"
           {
             echo "ROM family: ${ROM_FAMILY}"
             echo "Device: ${DEVICE_NAME}"
             echo "Selection fingerprint: ${MODULE_SELECTION_FINGERPRINT}"
             echo "Output scope: ${OUTPUT_SCOPE}"
           } >> "${GITHUB_STEP_SUMMARY}"
-
-      - name: Upload build-only artifact
-        if: inputs.publish == false || inputs.release-type == 'build-only'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ inputs.rom-family }}-${{ inputs.device-id }}-${{ env.MODULE_SELECTION_FINGERPRINT }}
-          if-no-files-found: error
-          path: |
-            ${{ env.OUTPUTS_PATCHED_OTA }}
-            ${{ env.OUTPUTS_PATCHED_OTA }}.csig
 
       - name: Re-enforce publication policy
         if: inputs.publish && inputs.release-type != 'build-only'
@@ -175,7 +192,7 @@ jobs:
           source src/declarations.sh
           source src/rom_profiles.sh
           resolve_rom_profile
-          enforce_output_policy "${OUTPUT_SCOPE}"
+          enforce_publication_evidence "${OUTPUT_SCOPE}"
           [[ "${MODULE_SELECTION_FINGERPRINT}" =~ ^[0-9a-f]{64}$ ]]
 
       - name: Generate changelog
@@ -196,6 +213,7 @@ jobs:
           files: |
             ${{ env.OUTPUTS_PATCHED_OTA }}
             ${{ env.OUTPUTS_PATCHED_OTA }}.csig
+            ${{ env.SELECTION_METADATA }}
           name: ${{ env.GRAPHENEOS_VERSION }}
           tag_name: ${{ env.GRAPHENEOS_VERSION }}
 
@@ -214,15 +232,17 @@ jobs:
 
           git checkout gh-pages
           target_file="${flavor}/${DEVICE_NAME}.json"
-          mkdir -p -- "${flavor}"
+          variant_file="variants/${ROM_FAMILY}/${flavor}/${DEVICE_NAME}-${MODULE_SELECTION_FINGERPRINT}.json"
+          mkdir -p -- "${flavor}" "$(dirname -- "${variant_file}")"
           [[ -f "${DEVICE_NAME}.json" ]] || {
             echo "::error::Missing generated OTA metadata for ${DEVICE_NAME}"
             exit 1
           }
           cp -- "${DEVICE_NAME}.json" "${target_file}"
-          git add -- "${target_file}"
+          cp -- "${DEVICE_NAME}.json" "${variant_file}"
+          git add -- "${target_file}" "${variant_file}"
 
-          if [[ "${{ inputs.release-type }}" == 'force-publish' ]]; then
+          if [[ "${RELEASE_TYPE}" == 'force-publish' ]]; then
             printf 'force-publish run %s (attempt %s)\n' \
               "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" > .tmp
             git add -- .tmp

@@ -116,10 +116,17 @@ test_selection_fingerprint() (
   repeated="$(fingerprint)"
   assert_equals "${baseline}" "${repeated}" "deterministic fingerprint"
 
+  MAGISK[PREINIT]="sda10"
   ADDITIONALS[ROOT]="true"
   root_changed="$(fingerprint)"
   [[ "${root_changed}" != "${baseline}" ]] ||
     fail "root selection did not change the fingerprint"
+
+  MAGISK[PREINIT]="sda47"
+  local preinit_changed
+  preinit_changed="$(fingerprint)"
+  [[ "${preinit_changed}" != "${root_changed}" ]] ||
+    fail "Magisk preinit selection did not change the fingerprint"
 
   ADDITIONALS[ROOT]="false"
   ROM_FAMILY="lineageos"
@@ -137,14 +144,13 @@ test_selection_fingerprint() (
 )
 
 test_output_filename_contains_fingerprint() (
-  local full compact
+  local full
 
   load_contract
   set_selection_fixture
   DEVICE_NAME="shiba"
   VERSION[GRAPHENEOS]="2026071700"
   full="$(fingerprint)"
-  compact="${full:0:16}"
 
   git() {
     if [[ "${1:-}" == "rev-parse" ]]; then
@@ -156,7 +162,7 @@ test_output_filename_contains_fingerprint() (
   dirty_suffix() { :; }
 
   generate_ota_info
-  [[ "${OUTPUTS[PATCHED_OTA]}" == *"-${compact}-"* ]] ||
+  [[ "${OUTPUTS[PATCHED_OTA]}" == *"-${full}-"* ]] ||
     fail "output filename does not include selection fingerprint: ${OUTPUTS[PATCHED_OTA]}"
 )
 
@@ -170,6 +176,8 @@ test_output_policy() (
     enforce_output_policy "${scope}" >/dev/null ||
       fail "disabled legacy profile rejected allowed scope ${scope}"
   done
+  enforce_publication_evidence published >/dev/null ||
+    fail "legacy profile rejected publication evidence gate"
 
   ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]="true"
   enforce_output_policy local-unpublished >/dev/null ||
@@ -179,6 +187,9 @@ test_output_policy() (
       fail "F-Droid profile unexpectedly allowed ${scope} output"
     fi
   done
+  if enforce_publication_evidence published >/dev/null 2>&1; then
+    fail "F-Droid profile unexpectedly passed publication evidence gate"
+  fi
 
   if enforce_output_policy unknown-scope >/dev/null 2>&1; then
     fail "unknown output scope unexpectedly passed policy enforcement"

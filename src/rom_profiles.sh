@@ -16,6 +16,13 @@ function _require_profile_boolean() {
   fi
 }
 
+function validate_device_name() {
+  if [[ ! "${DEVICE_NAME}" =~ ^[a-z0-9_]+$ ]]; then
+    echo "Error: invalid device name." >&2
+    return 1
+  fi
+}
+
 function resolve_rom_profile() {
   case "${ROM_FAMILY}" in
   grapheneos)
@@ -84,6 +91,23 @@ function enforce_output_policy() {
   fi
 }
 
+function enforce_publication_evidence() {
+  local output_scope="${1}"
+
+  if [[ "${output_scope}" != 'published' ]]; then
+    echo "Error: publication requires the published output scope." >&2
+    return 1
+  fi
+  enforce_output_policy "${output_scope}" || return 1
+
+  # No locked adapter currently has a reviewed source-delivery publication
+  # path. The helper report remains authoritative once such a path exists.
+  if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' ]]; then
+    echo "Error: locked-module publication evidence is unavailable." >&2
+    return 1
+  fi
+}
+
 function _locked_input_digest() {
   local input_path="${1}"
 
@@ -97,6 +121,7 @@ function _locked_input_digest() {
 function module_selection_fingerprint() {
   local lock_digest="disabled"
   local profile_digest="disabled"
+  local magisk_preinit="disabled"
   local entry
   local -a module_entries=(
     "alterinstaller:ALTERINSTALLER"
@@ -118,6 +143,14 @@ function module_selection_fingerprint() {
       "${ADDITIONALS[${entry#*:}]}" || return 1
   done
 
+  if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
+    magisk_preinit="${MAGISK[PREINIT]}"
+    if [[ ! "${magisk_preinit}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+      echo "Error: rooted profiles require a canonical Magisk preinit device." >&2
+      return 1
+    fi
+  fi
+
   if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' ]]; then
     lock_digest="$(_locked_input_digest "${FDROID_PRIVILEGED_EXTENSION_LOCK}")" || {
       echo "Error: the F-Droid lock is not clean and checked in." >&2
@@ -135,6 +168,7 @@ function module_selection_fingerprint() {
       "rom_family=${ROM_FAMILY}" \
       "output_scope=${OUTPUT_SCOPE}" \
       "root=${ADDITIONALS[ROOT]}" \
+      "magisk_preinit=${magisk_preinit}" \
       "debug=${ADDITIONALS[DEBUG]}" \
       "compatible_sepolicy=${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}" \
       "clear_vbmeta_flags=${ROM_PROFILE[CLEAR_VBMETA_FLAGS]}" \
