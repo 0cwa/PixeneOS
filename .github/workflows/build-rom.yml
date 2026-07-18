@@ -1,0 +1,233 @@
+name: Reusable ROM build
+
+on:
+  workflow_call:
+    inputs:
+      rom-family:
+        required: true
+        type: string
+      device-id:
+        required: true
+        type: string
+      root:
+        required: true
+        type: boolean
+      magisk-preinit-device:
+        required: false
+        type: string
+        default: ""
+      update-channel:
+        required: true
+        type: string
+      compatible-sepolicy-patching:
+        required: true
+        type: boolean
+      allow-unauthorized-adb:
+        required: true
+        type: boolean
+      release-type:
+        required: true
+        type: string
+      publish:
+        required: true
+        type: boolean
+    secrets:
+      AVB_KEY:
+        required: true
+      CERT_OTA:
+        required: true
+      OTA_KEY:
+        required: true
+      PASSPHRASE_AVB:
+        required: true
+      PASSPHRASE_OTA:
+        required: true
+      GH_TOKEN:
+        required: false
+      EMAIL:
+        required: false
+
+env:
+  CARGO_INCREMENTAL: 1
+  DEVICE_NAME: ${{ inputs.device-id }}
+  INTERACTIVE_MODE: false
+  ROM_FAMILY: ${{ inputs.rom-family }}
+  GRAPHENEOS_UPDATE_CHANNEL: ${{ inputs.update-channel }}
+  OUTPUT_SCOPE: ${{ inputs.publish && inputs.release-type != 'build-only' && 'published' || 'local-unpublished' }}
+  RUST_BACKTRACE: short
+  RUSTUP_MAX_RETRIES: 10
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Validate build request
+        shell: bash
+        env:
+          ADDITIONALS_DEBUG: ${{ inputs.allow-unauthorized-adb }}
+          ADDITIONALS_MAS_COMPATIBLE_SEPOLICY: ${{ inputs.compatible-sepolicy-patching }}
+          ADDITIONALS_ROOT: ${{ inputs.root }}
+        run: |
+          if [[ "${ADDITIONALS_ROOT}" == "true" && -z "${{ inputs.magisk-preinit-device }}" ]]; then
+            echo "::error::magisk-preinit-device is required for rooted builds"
+            exit 1
+          fi
+          case "${{ inputs.release-type }}" in
+            default|build-only|force-publish) ;;
+            *) echo "::error::Unknown release type"; exit 1 ;;
+          esac
+
+      - name: Checkout shared implementation
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Enforce profile output policy
+        shell: bash
+        env:
+          ADDITIONALS_DEBUG: ${{ inputs.allow-unauthorized-adb }}
+          ADDITIONALS_MAS_COMPATIBLE_SEPOLICY: ${{ inputs.compatible-sepolicy-patching }}
+          ADDITIONALS_ROOT: ${{ inputs.root }}
+        run: |
+          source src/declarations.sh
+          source src/rom_profiles.sh
+          resolve_rom_profile
+          enforce_output_policy "${OUTPUT_SCOPE}"
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable 2 weeks ago
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2.9.1
+
+      - name: Install Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12-dev"
+
+      - name: Setup signing environment
+        shell: bash
+        run: |
+          echo "KEYS_AVB_BASE64<<EOF" >> "${GITHUB_ENV}"
+          echo "${{ secrets.AVB_KEY }}" >> "${GITHUB_ENV}"
+          echo "EOF" >> "${GITHUB_ENV}"
+          echo "KEYS_CERT_OTA_BASE64<<EOF" >> "${GITHUB_ENV}"
+          echo "${{ secrets.CERT_OTA }}" >> "${GITHUB_ENV}"
+          echo "EOF" >> "${GITHUB_ENV}"
+          echo "KEYS_OTA_BASE64<<EOF" >> "${GITHUB_ENV}"
+          echo "${{ secrets.OTA_KEY }}" >> "${GITHUB_ENV}"
+          echo "EOF" >> "${GITHUB_ENV}"
+
+      - name: Patch OTA
+        shell: bash
+        env:
+          ADDITIONALS_DEBUG: ${{ inputs.allow-unauthorized-adb }}
+          ADDITIONALS_MAS_COMPATIBLE_SEPOLICY: ${{ inputs.compatible-sepolicy-patching }}
+          ADDITIONALS_ROOT: ${{ inputs.root }}
+          CLEANUP: true
+          MAGISK_PREINIT: ${{ inputs.magisk-preinit-device }}
+          PASSPHRASE_AVB: ${{ secrets.PASSPHRASE_AVB }}
+          PASSPHRASE_OTA: ${{ secrets.PASSPHRASE_OTA }}
+        run: |
+          source src/main.sh
+          {
+            echo "GRAPHENEOS_OTA_TARGET=${GRAPHENEOS[OTA_TARGET]}"
+            echo "GRAPHENEOS_VERSION=${VERSION[GRAPHENEOS]}"
+            echo "MODULE_SELECTION_FINGERPRINT=${MODULE_SELECTION_FINGERPRINT}"
+            echo "OUTPUTS_PATCHED_OTA=${OUTPUTS[PATCHED_OTA]}"
+            echo "WORKDIR=${WORKDIR}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Record build metadata
+        shell: bash
+        run: |
+          {
+            echo "ROM family: ${ROM_FAMILY}"
+            echo "Device: ${DEVICE_NAME}"
+            echo "Selection fingerprint: ${MODULE_SELECTION_FINGERPRINT}"
+            echo "Output scope: ${OUTPUT_SCOPE}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload build-only artifact
+        if: inputs.publish == false || inputs.release-type == 'build-only'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.rom-family }}-${{ inputs.device-id }}-${{ env.MODULE_SELECTION_FINGERPRINT }}
+          if-no-files-found: error
+          path: |
+            ${{ env.OUTPUTS_PATCHED_OTA }}
+            ${{ env.OUTPUTS_PATCHED_OTA }}.csig
+
+      - name: Re-enforce publication policy
+        if: inputs.publish && inputs.release-type != 'build-only'
+        shell: bash
+        env:
+          ADDITIONALS_DEBUG: ${{ inputs.allow-unauthorized-adb }}
+          ADDITIONALS_MAS_COMPATIBLE_SEPOLICY: ${{ inputs.compatible-sepolicy-patching }}
+          ADDITIONALS_ROOT: ${{ inputs.root }}
+        run: |
+          source src/declarations.sh
+          source src/rom_profiles.sh
+          resolve_rom_profile
+          enforce_output_policy "${OUTPUT_SCOPE}"
+          [[ "${MODULE_SELECTION_FINGERPRINT}" =~ ^[0-9a-f]{64}$ ]]
+
+      - name: Generate changelog
+        if: inputs.publish && inputs.release-type != 'build-only'
+        shell: bash
+        run: |
+          {
+            echo "ROM family: ${ROM_FAMILY}"
+            echo "Device: ${DEVICE_NAME}"
+            echo "Module-selection fingerprint: ${MODULE_SELECTION_FINGERPRINT}"
+          } > "${GITHUB_WORKSPACE}-CHANGELOG.txt"
+
+      - name: Publish GitHub release
+        if: inputs.publish && inputs.release-type != 'build-only'
+        uses: softprops/action-gh-release@v3
+        with:
+          body_path: ${{ github.workspace }}-CHANGELOG.txt
+          files: |
+            ${{ env.OUTPUTS_PATCHED_OTA }}
+            ${{ env.OUTPUTS_PATCHED_OTA }}.csig
+          name: ${{ env.GRAPHENEOS_VERSION }}
+          tag_name: ${{ env.GRAPHENEOS_VERSION }}
+
+      - name: Publish OTA metadata
+        if: inputs.publish && inputs.release-type != 'build-only'
+        shell: bash
+        run: |
+          git config user.email "${{ secrets.EMAIL }}"
+          git config user.name "${{ github.repository_owner }}"
+          current_commit="$(git rev-parse --short HEAD)"
+          if [[ "${{ inputs.root }}" == 'true' ]]; then
+            flavor='magisk'
+          else
+            flavor='rootless'
+          fi
+
+          git checkout gh-pages
+          target_file="${flavor}/${DEVICE_NAME}.json"
+          mkdir -p -- "${flavor}"
+          [[ -f "${DEVICE_NAME}.json" ]] || {
+            echo "::error::Missing generated OTA metadata for ${DEVICE_NAME}"
+            exit 1
+          }
+          cp -- "${DEVICE_NAME}.json" "${target_file}"
+          git add -- "${target_file}"
+
+          if [[ "${{ inputs.release-type }}" == 'force-publish' ]]; then
+            printf 'force-publish run %s (attempt %s)\n' \
+              "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" > .tmp
+            git add -- .tmp
+          fi
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "release(${current_commit}): publish ${ROM_FAMILY} ${GRAPHENEOS_VERSION} ${MODULE_SELECTION_FINGERPRINT}"
+            git push origin gh-pages
+          fi
