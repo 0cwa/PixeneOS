@@ -58,8 +58,8 @@ KEYS[OTA_BASE64]="${KEYS[OTA_BASE64]:-''}"
 KEYS[PKMD]="${KEYS[PKMD]:-avb_pkmd.bin}"
 
 # GrapheneOS
-GRAPHENEOS[OTA_BASE_URL]="https://download.lineageos.org/api/v1"
-GRAPHENEOS[UPDATE_CHANNEL]="${GRAPHENEOS_UPDATE_CHANNEL:-nightly}"
+GRAPHENEOS[OTA_BASE_URL]="https://releases.grapheneos.org"
+GRAPHENEOS[UPDATE_CHANNEL]="${GRAPHENEOS_UPDATE_CHANNEL:-stable}"
 GRAPHENEOS[UPDATE_TYPE]="${GRAPHENEOS[UPDATE_TYPE]:-ota_update}" # avbroot supports only `ota_update` and not `install` (factory images)
 GRAPHENEOS[OTA_URL]="${GRAPHENEOS[OTA_URL]:-}"                   # Will be constructed from the latest version
 GRAPHENEOS[OTA_TARGET]="${GRAPHENEOS[OTA_TARGET]:-}"             # Will be constructed from the latest version
