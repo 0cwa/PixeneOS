@@ -9,6 +9,7 @@ declare -A GRAPHENEOS
 declare -A KEYS
 declare -A MAGISK
 declare -A OUTPUTS
+declare -A ROM_PROFILE
 declare -A VERSION
 
 # Build Specifications
@@ -20,6 +21,9 @@ ARCH="x86_64-unknown-linux-gnu" # for Linux
 CLEANUP="${CLEANUP:-'false'}"                # Clean up after the script finishes
 DEVICE_NAME="${DEVICE_NAME:-}"               # Device name, passed from the CI environment
 INTERACTIVE_MODE="${INTERACTIVE_MODE:-true}" # Enable interactive mode
+ROM_FAMILY="${ROM_FAMILY:-grapheneos}"
+OUTPUT_SCOPE="${OUTPUT_SCOPE:-local-unpublished}"
+MODULE_SELECTION_FINGERPRINT="${MODULE_SELECTION_FINGERPRINT:-}"
 WORKDIR=".tmp"
 
 # GitHub variables
@@ -57,12 +61,13 @@ KEYS[OTA]="${KEYS[OTA]:-ota.key}"
 KEYS[OTA_BASE64]="${KEYS[OTA_BASE64]:-''}"
 KEYS[PKMD]="${KEYS[PKMD]:-avb_pkmd.bin}"
 
-# GrapheneOS
-GRAPHENEOS[OTA_BASE_URL]="https://releases.grapheneos.org"
-GRAPHENEOS[UPDATE_CHANNEL]="${GRAPHENEOS_UPDATE_CHANNEL:-stable}"
-GRAPHENEOS[UPDATE_TYPE]="${GRAPHENEOS[UPDATE_TYPE]:-ota_update}" # avbroot supports only `ota_update` and not `install` (factory images)
-GRAPHENEOS[OTA_URL]="${GRAPHENEOS[OTA_URL]:-}"                   # Will be constructed from the latest version
-GRAPHENEOS[OTA_TARGET]="${GRAPHENEOS[OTA_TARGET]:-}"             # Will be constructed from the latest version
+# Compatibility keys retained for existing callers. resolve_rom_profile fills
+# these through the common ROM capability profile.
+GRAPHENEOS[OTA_BASE_URL]="${GRAPHENEOS[OTA_BASE_URL]:-}"
+GRAPHENEOS[UPDATE_CHANNEL]="${GRAPHENEOS[UPDATE_CHANNEL]:-}"
+GRAPHENEOS[UPDATE_TYPE]="${GRAPHENEOS[UPDATE_TYPE]:-}"
+GRAPHENEOS[OTA_URL]="${GRAPHENEOS[OTA_URL]:-}"
+GRAPHENEOS[OTA_TARGET]="${GRAPHENEOS[OTA_TARGET]:-}"
 
 # Additionals
 

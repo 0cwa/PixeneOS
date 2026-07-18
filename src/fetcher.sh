@@ -5,10 +5,11 @@
 # Contains the functions to fetch the required files. In short, this takes care of downloading the OTA, Magisk, and other dependencies.
 
 source src/declarations.sh
+source src/rom_profiles.sh
+source src/ota_providers.sh
 
 # Fetch the latest version of GrapheneOS and Magisk and sets up the OTA URL
 function get_latest_version() {
-  local latest_grapheneos_version=$(curl -sL "${GRAPHENEOS[OTA_BASE_URL]}/${DEVICE_NAME}-${GRAPHENEOS[UPDATE_CHANNEL]}" | sed 's/ .*//')
   local latest_magisk_version=$(
     git ls-remote --tags "${DOMAIN}/${MAGISK[REPOSITORY]}.git" |
       awk -F'\t' '{print $2}' |
@@ -18,27 +19,15 @@ function get_latest_version() {
       tail -n1
   )
 
-  if [[ GRAPHENEOS[UPDATE_TYPE] == "install" ]]; then
+  resolve_rom_profile || return 1
+
+  if [[ "${GRAPHENEOS[UPDATE_TYPE]}" == "install" ]]; then
     echo -e "The update type is set to \`install\` which is not supported by AVBRoot.\nExiting..."
     exit 1
   fi
 
-  # Construct the URLs
-  GRAPHENEOS[OTA_TARGET]="${DEVICE_NAME}-${GRAPHENEOS[UPDATE_TYPE]}-${latest_grapheneos_version}"
-  # e.g. https://releases.grapheneos.org/bluejay-stable
-  GRAPHENEOS[OTA_URL]="${GRAPHENEOS[OTA_BASE_URL]}/${GRAPHENEOS[OTA_TARGET]}.zip"
-
-  # e.g.  bluejay-ota_update-2024080200
-  echo -e "GrapheneOS OTA target: \`${GRAPHENEOS[OTA_TARGET]}\`\nGrapheneOS OTA URL: ${GRAPHENEOS[OTA_URL]}\n"
-
-  if [[ -z "${latest_grapheneos_version}" ]]; then
-    echo -e "Failed to get the latest version."
-    exit 1
-  fi
-
-  if [[ -z "${VERSION[GRAPHENEOS]}" ]]; then
-    VERSION[GRAPHENEOS]="${GRAPHENEOS_VERSION:-${latest_grapheneos_version}}"
-  fi
+  fetch_rom_ota_metadata || return 1
+  echo -e "${ROM_FAMILY} OTA target: \`${GRAPHENEOS[OTA_TARGET]}\`\nOTA URL: ${GRAPHENEOS[OTA_URL]}\n"
 
   if [[ -z "${latest_magisk_version}" ]]; then
     echo -e "Failed to get the latest Magisk version."
@@ -95,7 +84,7 @@ function download_ota() {
   local ota="${WORKDIR}/${GRAPHENEOS[OTA_TARGET]}.zip"
 
   # Set the URLs if not set
-  if [ -n "${GRAPHENEOS[OTA_URL]}" ]; then
+  if [[ -z "${GRAPHENEOS[OTA_URL]}" || -z "${GRAPHENEOS[OTA_TARGET]}" ]]; then
     get_latest_version
   fi
 

@@ -9,6 +9,7 @@ source src/exchange.sh
 source src/fetcher.sh
 source src/verifier.sh
 source src/debug_module_setup.sh
+source src/rom_profiles.sh
 
 # Function to check and download the dependencies
 # This function checks for the required tools and downloads them if not found depending on the configuration done in the declarations file
@@ -270,6 +271,10 @@ function generate_keys() {
 # Leverages `my-avbroot-setup` to patch the OTA
 # This function does a lot of things before patching the OTA
 function patch_ota() {
+  if [[ -z "${ROM_PROFILE[PROVIDER]:-}" ]]; then
+    resolve_rom_profile
+  fi
+
   if [[ "${INTERACTIVE_MODE}" != 'true' ]]; then
     base64_decode
   fi
@@ -343,6 +348,10 @@ function patch_ota() {
       args+=("${locked_module_args[@]}")
     elif ! prepare_fdroid_privileged_extension args "${my_avbroot_setup}"; then
       return 1
+    fi
+
+    if [[ "${ROM_PROFILE[CLEAR_VBMETA_FLAGS]}" == 'true' ]]; then
+      args+=("--patch-arg=--clear-vbmeta-flags")
     fi
 
     # Add debug module if unauthorized ADB is enabled
@@ -643,9 +652,12 @@ function generate_ota_info() {
     debug_suffix="-debug-adb"
   fi
 
-  # e.g. bluejay-2024082200-rootless-abc12345-dirty.zip
-  # Debug builds are intentionally labeled, e.g. bluejay-2024082200-rootless-debug-adb-abc12345.zip
-  OUTPUTS[PATCHED_OTA]="${DEVICE_NAME}-${VERSION[GRAPHENEOS]}-${flavor}${debug_suffix}-$(git rev-parse --short HEAD)$(dirty_suffix).zip"
+  module_selection_fingerprint >/dev/null
+  local fingerprint_short="${MODULE_SELECTION_FINGERPRINT:0:16}"
+
+  # Debug builds are intentionally labeled. The stable selection fingerprint
+  # prevents otherwise identical ROM/profile variants from colliding.
+  OUTPUTS[PATCHED_OTA]="${DEVICE_NAME}-${VERSION[GRAPHENEOS]}-${flavor}${debug_suffix}-${fingerprint_short}-$(git rev-parse --short HEAD)$(dirty_suffix).zip"
 }
 
 function check_toml_env() {
