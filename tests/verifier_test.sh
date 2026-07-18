@@ -82,9 +82,93 @@ test_unsigned_exceptions_succeed() {
   verify_downloads magisk >/dev/null
 }
 
+test_locked_inputs_require_explicit_checked_in_files() {
+  reset_fixture locked-inputs
+  local lock_path="${WORKDIR}/fdroid.lock.json"
+  local profile_path="${WORKDIR}/fdroid.profile.toml"
+
+  if verify_fdroid_privileged_extension_inputs "" "" >/dev/null 2>&1; then
+    fail "locked inputs: empty paths unexpectedly succeeded"
+  fi
+
+  touch "${lock_path}" "${profile_path}"
+  if verify_fdroid_privileged_extension_inputs \
+    "${lock_path}" "${profile_path}" >/dev/null 2>&1; then
+    fail "locked inputs: untracked temporary files unexpectedly succeeded"
+  fi
+}
+
+test_locked_input_rejects_worktree_index_mode_and_path_aliases() {
+  reset_fixture locked-input-git-state
+  local repository="${WORKDIR}/repository with spaces"
+  local lock_path="${repository}/locks/fdroid lock.json"
+  local outside_path="${WORKDIR}/outside.lock"
+
+  git init -q -- "${repository}"
+  git -C "${repository}" config user.email test@example.invalid
+  git -C "${repository}" config user.name "Pixene test"
+  git -C "${repository}" config core.filemode true
+  mkdir -p "$(dirname -- "${lock_path}")"
+  printf '%s\n' '{"fixture":"clean"}' >"${lock_path}"
+  git -C "${repository}" add -- "locks/fdroid lock.json"
+  git -C "${repository}" commit -q -m fixture
+
+  (
+    cd "${repository}"
+    verify_checked_in_locked_input "${lock_path}"
+  ) || fail "clean checked-in lock was rejected"
+
+  printf '%s\n' '{"fixture":"dirty"}' >"${lock_path}"
+  if (
+    cd "${repository}"
+    verify_checked_in_locked_input "${lock_path}"
+  ); then
+    fail "dirty working-tree lock unexpectedly succeeded"
+  fi
+
+  git -C "${repository}" add -- "locks/fdroid lock.json"
+  git -C "${repository}" show 'HEAD:locks/fdroid lock.json' >"${lock_path}"
+  if (
+    cd "${repository}"
+    verify_checked_in_locked_input "${lock_path}"
+  ); then
+    fail "staged-only lock change unexpectedly succeeded"
+  fi
+
+  git -C "${repository}" restore --staged --worktree -- \
+    "locks/fdroid lock.json"
+  chmod +x "${lock_path}"
+  if (
+    cd "${repository}"
+    verify_checked_in_locked_input "${lock_path}"
+  ); then
+    fail "mode-only lock change unexpectedly succeeded"
+  fi
+
+  chmod -x "${lock_path}"
+  printf '%s\n' '{"fixture":"outside"}' >"${outside_path}"
+  if (
+    cd "${repository}"
+    verify_checked_in_locked_input "${outside_path}"
+  ); then
+    fail "outside-repository lock unexpectedly succeeded"
+  fi
+
+  local alias_path="${repository}/locks/fdroid-alias.json"
+  ln -s -- "fdroid lock.json" "${alias_path}"
+  if (
+    cd "${repository}"
+    verify_checked_in_locked_input "${alias_path}"
+  ); then
+    fail "symlink lock unexpectedly succeeded"
+  fi
+}
+
 test_matching_signature_succeeds
 test_missing_signature_fails
 test_wrong_module_signature_fails
 test_unsigned_exceptions_succeed
+test_locked_inputs_require_explicit_checked_in_files
+test_locked_input_rejects_worktree_index_mode_and_path_aliases
 
 echo "verifier tests passed"

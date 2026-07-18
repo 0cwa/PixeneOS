@@ -132,6 +132,61 @@ function append_enabled_module_arguments() {
   done
 }
 
+# Resolve and acquire the locked F-Droid inputs before exposing them to the
+# patch command. Artifact URLs and versions belong exclusively to the lock.
+function prepare_fdroid_privileged_extension() {
+  local args_name="${1}"
+  local helper_root="${2}"
+  local -n args_ref="${args_name}"
+  local lock_path="${FDROID_PRIVILEGED_EXTENSION_LOCK}"
+  local profile_path="${FDROID_PRIVILEGED_EXTENSION_PROFILE}"
+  local cache_path="${FDROID_PRIVILEGED_EXTENSION_CACHE:-${WORKDIR}/locked-artifacts}"
+  local report_path="${FDROID_PRIVILEGED_EXTENSION_PATCH_REPORT:-${OUTPUTS[PATCHED_OTA]}.patch-report.json}"
+  local module_tool="${helper_root}/module-tool.py"
+
+  if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" != 'true' ]]; then
+    return 0
+  fi
+
+  if ! verify_fdroid_privileged_extension_inputs \
+    "${lock_path}" "${profile_path}"; then
+    return 1
+  fi
+  if [[ ! -f "${module_tool}" || -L "${module_tool}" ]]; then
+    echo "Error: the pinned patch helper lacks the locked module tool." >&2
+    return 1
+  fi
+
+  if ! python "${module_tool}" resolve \
+    --profile "${profile_path}" \
+    --lock "${lock_path}" \
+    --format json >/dev/null; then
+    echo "Error: F-Droid locked profile resolution failed." >&2
+    return 1
+  fi
+  if ! python "${module_tool}" artifacts fetch \
+    --lock "${lock_path}" \
+    --cache "${cache_path}" \
+    --module fdroid-privileged-extension >/dev/null; then
+    echo "Error: F-Droid locked artifact fetch failed." >&2
+    return 1
+  fi
+  if ! python "${module_tool}" artifacts verify \
+    --lock "${lock_path}" \
+    --cache "${cache_path}" \
+    --module fdroid-privileged-extension >/dev/null; then
+    echo "Error: F-Droid locked artifact verification failed." >&2
+    return 1
+  fi
+
+  args_ref+=(
+    "--module-lock" "${lock_path}"
+    "--module-profile" "${profile_path}"
+    "--module-cache" "${cache_path}"
+    "--patch-report" "${report_path}"
+  )
+}
+
 # Function to create and make the release called by main script
 function create_and_make_release() {
   if [[ ! -d $WORKDIR ]]; then
@@ -238,7 +293,10 @@ function patch_ota() {
     extract_official_keys
   fi
 
-  if ls "${ota_zip}.patched*.zip" 1>/dev/null 2>&1; then
+  # Legacy output markers do not encode a locked module selection. Never reuse
+  # one for an enabled F-Droid build.
+  if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" != 'true' ]] &&
+    ls "${ota_zip}.patched*.zip" 1>/dev/null 2>&1; then
     echo -e "File ${ota_zip}.pathed.zip already exists in local. Patch skipped."
   else
     echo -e "Patching OTA..."
@@ -261,8 +319,16 @@ function patch_ota() {
     args+=("--pass-avb-env-var" "PASSPHRASE_AVB")
     args+=("--pass-ota-env-var" "PASSPHRASE_OTA")
 
+    # Clear the extraction scratch tree before locked acquisition. A
+    # caller-selected cache below this tree must not be verified and then
+    # deleted before patch.py consumes it.
+    rm -rf -- "${WORKDIR}/extracted/extracts/"
+
     # Modules and their signatures
     append_enabled_module_arguments args
+    if ! prepare_fdroid_privileged_extension args "${my_avbroot_setup}"; then
+      return 1
+    fi
 
     # Add debug module if unauthorized ADB is enabled
     if [[ "${ADDITIONALS[DEBUG]}" == 'true' ]]; then
@@ -292,11 +358,8 @@ function patch_ota() {
       echo -e "Magisk is not enabled. Skipping...\n"
     fi
     
-    # Have to clear storage space because, `csig` results in storage runout
-    rm -rf ${WORKDIR}/extracted/extracts/
-
     # Python command to run the patch script
-    python ${my_avbroot_setup}/patch.py "${args[@]}"
+    python "${my_avbroot_setup}/patch.py" "${args[@]}"
   fi
 
   # Deactivate the virtual environment after patching the OTA

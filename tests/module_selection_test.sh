@@ -13,9 +13,35 @@ trap 'rm -rf "${TEST_ROOT}"' EXIT
 
 declare -a CAPTURED_ARGS=()
 declare -a EXPECTED_ARGS=()
+declare -a PREPARE_STAGES=()
+PREPARE_FAILURE=""
+PREPARE_CACHE_SENTINEL=""
+LOCKED_INPUTS_VALID="true"
 
 python() {
+  local stage
+
+  if [[ "${1}" == */module-tool.py ]]; then
+    if [[ "${2}" == "artifacts" ]]; then
+      stage="artifacts-${3}"
+    else
+      stage="${2}"
+    fi
+    PREPARE_STAGES+=("${stage}")
+    if [[ "${stage}" == "artifacts-fetch" &&
+      -n "${PREPARE_CACHE_SENTINEL}" ]]; then
+      mkdir -p "$(dirname -- "${PREPARE_CACHE_SENTINEL}")"
+      touch -- "${PREPARE_CACHE_SENTINEL}"
+    fi
+    [[ "${stage}" != "${PREPARE_FAILURE}" ]]
+    return
+  fi
+
   CAPTURED_ARGS=("$@")
+}
+
+verify_checked_in_locked_input() {
+  [[ "${LOCKED_INPUTS_VALID}" == "true" ]]
 }
 
 deactivate() {
@@ -80,6 +106,36 @@ assert_not_contains() {
   done
 }
 
+assert_pair() {
+  local option="${1}"
+  local expected_value="${2}"
+  local context="${3}"
+  local index
+
+  for index in "${!CAPTURED_ARGS[@]}"; do
+    if [[ "${CAPTURED_ARGS[${index}]}" == "${option}" ]]; then
+      [[ "${CAPTURED_ARGS[$((index + 1))]:-}" == "${expected_value}" ]] ||
+        fail "${context}: ${option} has the wrong value"
+      return 0
+    fi
+  done
+  fail "${context}: missing ${option}"
+}
+
+assert_prepare_stages() {
+  local context="${1}"
+  shift
+  local -a expected=("$@")
+  local index
+
+  [[ "${#expected[@]}" -eq "${#PREPARE_STAGES[@]}" ]] ||
+    fail "${context}: wrong preparation stage count"
+  for index in "${!expected[@]}"; do
+    [[ "${expected[${index}]}" == "${PREPARE_STAGES[${index}]}" ]] ||
+      fail "${context}: preparation order differs"
+  done
+}
+
 reset_fixture() {
   local case_name="${1}"
 
@@ -90,7 +146,8 @@ reset_fixture() {
     "${WORKDIR}/tools/my-avbroot-setup"
   touch \
     "${WORKDIR}/extracted/avb_pkmd.bin" \
-    "${WORKDIR}/extracted/ota/META-INF/com/android/otacert"
+    "${WORKDIR}/extracted/ota/META-INF/com/android/otacert" \
+    "${WORKDIR}/tools/my-avbroot-setup/module-tool.py"
 
   GRAPHENEOS[OTA_TARGET]="fixture-ota"
   OUTPUTS[PATCHED_OTA]="${WORKDIR}/patched.zip"
@@ -107,11 +164,21 @@ reset_fixture() {
   ADDITIONALS[BCR]="true"
   ADDITIONALS[OEMUNLOCKONBOOT]="true"
   ADDITIONALS[ALTERINSTALLER]="true"
+  ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]="false"
   ADDITIONALS[DEBUG]="false"
   ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]="false"
   ADDITIONALS[ROOT]="false"
 
+  FDROID_PRIVILEGED_EXTENSION_LOCK=""
+  FDROID_PRIVILEGED_EXTENSION_PROFILE=""
+  FDROID_PRIVILEGED_EXTENSION_CACHE=""
+  FDROID_PRIVILEGED_EXTENSION_PATCH_REPORT=""
+  LOCKED_INPUTS_VALID="true"
+  PREPARE_FAILURE=""
+  PREPARE_CACHE_SENTINEL=""
+
   CAPTURED_ARGS=()
+  PREPARE_STAGES=()
 }
 
 set_default_expected_args() {
@@ -239,9 +306,120 @@ test_special_cases_remain_available() {
   assert_contains "--patch-arg=--rootless" "debug"
 }
 
+enable_fdroid_fixture() {
+  ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]="true"
+  FDROID_PRIVILEGED_EXTENSION_LOCK="${WORKDIR}/fdroid.lock.json"
+  FDROID_PRIVILEGED_EXTENSION_PROFILE="${WORKDIR}/fdroid.profile.toml"
+  touch \
+    "${FDROID_PRIVILEGED_EXTENSION_LOCK}" \
+    "${FDROID_PRIVILEGED_EXTENSION_PROFILE}"
+}
+
+test_fdroid_locked_preparation_and_arguments() {
+  reset_fixture fdroid-enabled
+  enable_fdroid_fixture
+  run_patch
+
+  assert_prepare_stages \
+    "F-Droid preparation" \
+    resolve artifacts-fetch artifacts-verify
+  assert_pair \
+    "--module-lock" "${FDROID_PRIVILEGED_EXTENSION_LOCK}" "F-Droid"
+  assert_pair \
+    "--module-profile" "${FDROID_PRIVILEGED_EXTENSION_PROFILE}" "F-Droid"
+  assert_pair \
+    "--module-cache" "${WORKDIR}/locked-artifacts" "F-Droid"
+  assert_pair \
+    "--patch-report" "${OUTPUTS[PATCHED_OTA]}.patch-report.json" "F-Droid"
+  assert_not_contains \
+    "--module-fdroid-privileged-extension" "F-Droid legacy archive"
+  assert_not_contains \
+    "--module-fdroid-privileged-extension-sig" "F-Droid legacy signature"
+}
+
+assert_patch_fails_before_execution() {
+  local context="${1}"
+
+  if patch_ota >/dev/null 2>&1; then
+    fail "${context}: patch unexpectedly succeeded"
+  fi
+  [[ "${#CAPTURED_ARGS[@]}" -eq 0 ]] ||
+    fail "${context}: patch command was executed"
+}
+
+test_fdroid_missing_or_untracked_inputs_fail_closed() {
+  reset_fixture fdroid-missing-inputs
+  ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]="true"
+  assert_patch_fails_before_execution "missing locked inputs"
+  assert_prepare_stages "missing locked inputs"
+
+  reset_fixture fdroid-untracked-inputs
+  enable_fdroid_fixture
+  LOCKED_INPUTS_VALID="false"
+  assert_patch_fails_before_execution "untracked locked inputs"
+  assert_prepare_stages "untracked locked inputs"
+}
+
+test_fdroid_preparation_stages_fail_closed() {
+  local failure
+
+  for failure in resolve artifacts-fetch artifacts-verify; do
+    reset_fixture "fdroid-fail-${failure}"
+    enable_fdroid_fixture
+    PREPARE_FAILURE="${failure}"
+    assert_patch_fails_before_execution "failed ${failure}"
+    case "${failure}" in
+    resolve)
+      assert_prepare_stages "failed resolve" resolve
+      ;;
+    artifacts-fetch)
+      assert_prepare_stages \
+        "failed fetch" resolve artifacts-fetch
+      ;;
+    artifacts-verify)
+      assert_prepare_stages \
+        "failed verify" resolve artifacts-fetch artifacts-verify
+      ;;
+    esac
+  done
+}
+
+test_fdroid_locked_paths_survive_cleanup_and_quoting() {
+  reset_fixture "fdroid paths with spaces [literal]*"
+  enable_fdroid_fixture
+  FDROID_PRIVILEGED_EXTENSION_CACHE="${WORKDIR}/extracted/extracts/cache [literal]*"
+  FDROID_PRIVILEGED_EXTENSION_PATCH_REPORT="${WORKDIR}/reports/patch report [literal]*.json"
+  PREPARE_CACHE_SENTINEL="${FDROID_PRIVILEGED_EXTENSION_CACHE}/verified-object"
+
+  run_patch
+
+  [[ -f "${PREPARE_CACHE_SENTINEL}" ]] ||
+    fail "F-Droid cache was removed after locked verification"
+  assert_pair \
+    "--module-cache" "${FDROID_PRIVILEGED_EXTENSION_CACHE}" \
+    "F-Droid quoted cache"
+  assert_pair \
+    "--patch-report" "${FDROID_PRIVILEGED_EXTENSION_PATCH_REPORT}" \
+    "F-Droid quoted report"
+}
+
+test_fdroid_enabled_does_not_reuse_legacy_output_marker() {
+  reset_fixture fdroid-legacy-marker
+  ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]="true"
+  touch -- "${WORKDIR}/${GRAPHENEOS[OTA_TARGET]}.patched*.zip"
+
+  assert_patch_fails_before_execution "enabled F-Droid legacy marker"
+  assert_prepare_stages "enabled F-Droid legacy marker"
+}
+
 test_default_arguments
 test_each_module_can_be_disabled
 test_all_modules_can_be_disabled
 test_special_cases_remain_available
+test_fdroid_locked_preparation_and_arguments
+test_fdroid_missing_or_untracked_inputs_fail_closed
+test_fdroid_preparation_stages_fail_closed
+test_fdroid_locked_paths_survive_cleanup_and_quoting
+test_fdroid_enabled_does_not_reuse_legacy_output_marker
 
 echo "module selection tests passed"
