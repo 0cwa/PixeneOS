@@ -1,0 +1,5 @@
+# These exact historical findings are variable names for expected SSH signature
+# messages, not API keys. Keep the exceptions bound to their original commit,
+# path, rule, and line so later findings remain fail-closed.
+97c0d147a50d0cf5e2714089cd35acd0e205d578:src/util_functions.sh:generic-api-key:30
+97c0d147a50d0cf5e2714089cd35acd0e205d578:src/util_functions.sh:generic-api-key:40
