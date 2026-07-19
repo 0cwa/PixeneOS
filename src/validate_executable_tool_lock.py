@@ -27,7 +27,7 @@ SIGNER_IDENTITY = "chenxiaolong"
 SIGNATURE_NAMESPACE = "file"
 SIGNATURE_TYPE = "ssh"
 SIGNER_KEY_TYPE = "ssh-ed25519"
-SIGNER_KEY = "AAAAC3NzaC1lZDI1NTE5AAAAIDOe6/tBnO7xZhAWXRj3ApUYgn+XZ0wnQiXM8B7tPgv4"
+SIGNER_PUBLIC_KEY = "AAAAC3NzaC1lZDI1NTE5AAAAIDOe6/tBnO7xZhAWXRj3ApUYgn+XZ0wnQiXM8B7tPgv4"
 SIGNER_FINGERPRINT = "SHA256:Ct0HoRyrFLrnF9W+A/BKEiJmwx7yWkgaW/JvghKrboA"
 
 MAX_LOCK_BYTES = 1024 * 1024
@@ -184,12 +184,12 @@ def parse_ssh_string(blob: bytes, offset: int, context: str) -> tuple[bytes, int
 
 def validate_trust(path: Path) -> str:
     raw = read_regular_file(path, MAX_TRUST_BYTES, "trust file")
-    expected_line = f"{SIGNER_IDENTITY} {SIGNER_KEY_TYPE} {SIGNER_KEY}\n".encode("ascii")
+    expected_line = f"{SIGNER_IDENTITY} {SIGNER_KEY_TYPE} {SIGNER_PUBLIC_KEY}\n".encode("ascii")
     if raw != expected_line:
         fail("trust file must contain exactly the reviewed chenxiaolong allowed-signer binding")
 
     try:
-        key_blob = base64.b64decode(SIGNER_KEY, validate=True)
+        key_blob = base64.b64decode(SIGNER_PUBLIC_KEY, validate=True)
     except (binascii.Error, ValueError) as exc:
         fail(f"trusted SSH key is not canonical base64: {exc}")
 

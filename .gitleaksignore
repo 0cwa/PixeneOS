@@ -3,3 +3,5 @@
 # path, rule, and line so later findings remain fail-closed.
 97c0d147a50d0cf5e2714089cd35acd0e205d578:src/util_functions.sh:generic-api-key:30
 97c0d147a50d0cf5e2714089cd35acd0e205d578:src/util_functions.sh:generic-api-key:40
+# Reviewed public Ed25519 signer key constant; not secret material.
+bd7e2bbcabf114b0c41ac87050327956c3de8c59:src/validate_executable_tool_lock.py:generic-api-key:30
