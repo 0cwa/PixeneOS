@@ -27,7 +27,9 @@ SIGNER_IDENTITY = "chenxiaolong"
 SIGNATURE_NAMESPACE = "file"
 SIGNATURE_TYPE = "ssh"
 SIGNER_KEY_TYPE = "ssh-ed25519"
-SIGNER_PUBLIC_KEY = "AAAAC3NzaC1lZDI1NTE5AAAAIDOe6/tBnO7xZhAWXRj3ApUYgn+XZ0wnQiXM8B7tPgv4"
+SIGNER_PUBLIC_KEY = (
+    "AAAAC3NzaC1lZDI1NTE5AAAAIDOe6/tBnO7xZhAWXRj3ApUYgn+XZ0wnQiXM8B7tPgv4"
+)
 SIGNER_FINGERPRINT = "SHA256:Ct0HoRyrFLrnF9W+A/BKEiJmwx7yWkgaW/JvghKrboA"
 
 MAX_LOCK_BYTES = 1024 * 1024
@@ -86,7 +88,9 @@ def fail(message: str) -> None:
     raise ValidationError(message)
 
 
-def require_exact_fields(value: Any, expected: frozenset[str], context: str) -> dict[str, Any]:
+def require_exact_fields(
+    value: Any, expected: frozenset[str], context: str
+) -> dict[str, Any]:
     if type(value) is not dict:
         fail(f"{context} must be an object")
     actual = frozenset(value)
@@ -182,11 +186,14 @@ def parse_ssh_string(blob: bytes, offset: int, context: str) -> tuple[bytes, int
     return blob[offset:end], end
 
 
-def validate_trust(path: Path) -> str:
-    raw = read_regular_file(path, MAX_TRUST_BYTES, "trust file")
-    expected_line = f"{SIGNER_IDENTITY} {SIGNER_KEY_TYPE} {SIGNER_PUBLIC_KEY}\n".encode("ascii")
+def validate_trust_bytes(raw: bytes) -> str:
+    expected_line = f"{SIGNER_IDENTITY} {SIGNER_KEY_TYPE} {SIGNER_PUBLIC_KEY}\n".encode(
+        "ascii"
+    )
     if raw != expected_line:
-        fail("trust file must contain exactly the reviewed chenxiaolong allowed-signer binding")
+        fail(
+            "trust file must contain exactly the reviewed chenxiaolong allowed-signer binding"
+        )
 
     try:
         key_blob = base64.b64decode(SIGNER_PUBLIC_KEY, validate=True)
@@ -202,10 +209,22 @@ def validate_trust(path: Path) -> str:
     if len(public_key) != 32:
         fail("trusted Ed25519 public key must contain exactly 32 key bytes")
 
-    encoded_digest = base64.b64encode(hashlib.sha256(key_blob).digest()).decode("ascii").rstrip("=")
+    encoded_digest = (
+        base64.b64encode(hashlib.sha256(key_blob).digest()).decode("ascii").rstrip("=")
+    )
     fingerprint = f"SHA256:{encoded_digest}"
     if fingerprint != SIGNER_FINGERPRINT:
         fail("trusted SSH key does not match the reviewed fingerprint")
+    return fingerprint
+
+
+def load_validated_trust(path: Path) -> tuple[str, bytes]:
+    raw = read_regular_file(path, MAX_TRUST_BYTES, "trust file")
+    return validate_trust_bytes(raw), raw
+
+
+def validate_trust(path: Path) -> str:
+    fingerprint, _ = load_validated_trust(path)
     return fingerprint
 
 
@@ -251,7 +270,9 @@ def validate_layout(value: Any, tool_id: str, policy: dict[str, Any]) -> None:
     if paths != sorted(paths):
         fail(f"tool {tool_id} layout paths must be sorted")
     if modes != policy["layout"]:
-        fail(f"tool {tool_id} layout paths or modes do not match the reviewed release layout")
+        fail(
+            f"tool {tool_id} layout paths or modes do not match the reviewed release layout"
+        )
 
 
 def validate_tool(raw_tool: Any, index: int, fingerprint: str) -> str:
@@ -295,7 +316,7 @@ def validate_tool(raw_tool: Any, index: int, fingerprint: str) -> str:
     return tool_id
 
 
-def validate_lock(path: Path, fingerprint: str) -> None:
+def validate_lock(path: Path, fingerprint: str) -> dict[str, Any]:
     raw = read_regular_file(path, MAX_LOCK_BYTES, "lock file")
     try:
         text = raw.decode("utf-8")
@@ -308,33 +329,47 @@ def validate_lock(path: Path, fingerprint: str) -> None:
             parse_constant=reject_nonstandard_number,
         )
     except json.JSONDecodeError as exc:
-        fail(f"lock file is not valid JSON: {exc.msg} at line {exc.lineno} column {exc.colno}")
+        fail(
+            f"lock file is not valid JSON: {exc.msg} at line {exc.lineno} column {exc.colno}"
+        )
 
     document = require_exact_fields(data, TOP_LEVEL_FIELDS, "lock")
-    if type(document["schema_version"]) is not int or document["schema_version"] != SCHEMA_VERSION:
+    if (
+        type(document["schema_version"]) is not int
+        or document["schema_version"] != SCHEMA_VERSION
+    ):
         fail(f"lock schema_version must be {SCHEMA_VERSION}")
     tools = document["tools"]
     if type(tools) is not list:
         fail("lock tools must be an array")
 
-    tool_ids = [validate_tool(tool, index, fingerprint) for index, tool in enumerate(tools)]
+    tool_ids = [
+        validate_tool(tool, index, fingerprint) for index, tool in enumerate(tools)
+    ]
     if len(tool_ids) != len(set(tool_ids)):
         fail("lock contains duplicate tool ids")
     expected_ids = sorted(TOOL_POLICY)
     if tool_ids != expected_ids:
-        fail(f"lock tools must contain exactly these ids in order: {', '.join(expected_ids)}")
+        fail(
+            f"lock tools must contain exactly these ids in order: {', '.join(expected_ids)}"
+        )
 
     canonical = json.dumps(document, ensure_ascii=True, indent=2, sort_keys=True) + "\n"
     if text != canonical:
         fail("lock file is not in canonical sorted-key JSON form")
+    return document
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Validate the executable-tool lock and SSH trust binding without network access."
     )
-    parser.add_argument("--lock", type=Path, default=DEFAULT_LOCK, help="lock JSON path")
-    parser.add_argument("--trust", type=Path, default=DEFAULT_TRUST, help="allowed-signers path")
+    parser.add_argument(
+        "--lock", type=Path, default=DEFAULT_LOCK, help="lock JSON path"
+    )
+    parser.add_argument(
+        "--trust", type=Path, default=DEFAULT_TRUST, help="allowed-signers path"
+    )
     return parser.parse_args(argv)
 
 
