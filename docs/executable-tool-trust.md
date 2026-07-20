@@ -116,15 +116,62 @@ identities, and wrong namespaces. Re-verify all retained release artifacts after
 rotation; do not infer that a new key authenticates old assets without valid new
 signatures or an authoritative cross-binding.
 
-## Explicit non-authorization
+## Runtime bootstrap enforcement
 
-This tranche does **not** integrate the lock into PixeneOS acquisition, cache
-reuse, extraction, permission changes, or execution. The presence of a lock
-entry, valid repository data, successful fixture validation, or prior manual
-inspection does not authorize executing an archive member. Until a later,
-independently reviewed integration enforces digest and signature verification on
-the actual downloaded inode before any extraction, `chmod`, or execution, the
-existing executable-tool acquisition path remains untrusted.
+`src/bootstrap_executable_tools.py` consumes this lock directly. The shell
+runtime does not reconstruct executable release versions, asset URLs, or
+layouts. It selects enabled tool IDs and submits the entire set in one batch.
+Every selected archive must pass its locked byte size, SHA-256, detached
+OpenSSH signature, exact hostile-archive inspection, and full member digest
+check before extraction of any selected archive begins.
+
+Downloads use bounded streaming into exclusive, no-follow files in a private
+mode-`0700` transaction directory. Verified bytes are fsynced and atomically
+published under `bootstrap-cache/objects`; a canonical receipt binds the
+archive digest to its verified signature digest. Cache hits repeat size,
+digest, signature, and archive inspection. A missing, corrupt, linked, or
+noncanonical cache entry fails closed.
+
+Members are extracted without `unzip` into private transaction directories.
+The extractor accepts only the exact locked top-level regular-file layout and
+rejects traversal, absolute paths, backslashes, aliases, duplicates, links,
+special files, directories, extras, encryption, unsupported ZIP flags or
+compression, overlapping compressed ranges, and excessive expansion. It
+rechecks extracted types, modes, sizes, and digests before atomically publishing
+the directory at `tools/by-sha256/<archive-sha256>`.
+
+Existing digest-addressed installations are fully revalidated. Legacy
+`tools/<id>` directories are never trusted as an installation bypass. Direct
+PixeneOS invocations use the runtime `run` command, which opens the exact
+digest-addressed installation through a held directory descriptor, revalidates
+the complete locked layout, copies the verified executable bytes into an
+anonymous file descriptor, sets the locked mode, seals the snapshot against
+content changes, and rechecks its digest and mode after sealing. It executes
+that sealed descriptor without resolving the executable pathname again.
+
+The `resolve` command and digest-addressed executable paths exist only for
+compatibility with the pinned helper. A successful resolution does not itself
+authorize execution. The helper still resolves `avbroot`, `afsr`, and
+`custota-tool` through `PATH`; PixeneOS places only enabled digest-addressed
+directories at the front of that path, but the helper's later pathname lookup
+remains an open execution boundary. Close it with the planned trusted-prefix
+`ToolRunner` integration before treating helper execution as inode-bound.
+
+The canonical JSON report contains stable tool identity, version, architecture,
+archive and member sizes/digests, and signer verification results. It omits
+URLs, timestamps, cache-hit state, temporary names, and all cache/report paths.
+The report is written atomically only after the complete selected transaction
+succeeds.
+
+The offline lock validator by itself still does **not** authorize extraction,
+permission changes, or execution. A successful runtime transaction authorizes
+authenticated installation, and the `run` command authorizes direct PixeneOS
+execution only through its post-seal-verified anonymous file descriptor. It
+does not authorize the helper's compatibility PATH execution. Run acquisition
+through `check_and_download_dependencies`; do not call the legacy downloader
+for these three executable tools. Real OTA integration remains blocked until
+the helper uses the trusted runner and the other documented host-code
+supply-chain gates are closed.
 
 [signing-guide]: https://github.com/chenxiaolong/chenxiaolong/blob/master/VERIFY_SSH_SIGNATURES.md
 [afsr-release]: https://github.com/chenxiaolong/afsr/releases/tag/v1.0.4
