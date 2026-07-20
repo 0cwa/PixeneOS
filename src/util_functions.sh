@@ -37,8 +37,31 @@ function check_and_download_dependencies() {
   # Convert the space-separated string back into an array
   IFS=' ' read -r -a tools_array <<<"${tools}"
 
+  local -a executable_tools=()
+  local tool flag
   for tool in "${tools_array[@]}"; do
-    local flag=$(flag_check "${tool}")
+    flag="$(flag_check "${tool}")"
+
+    if [[ "${tool}" == "afsr" || "${tool}" == "avbroot" || "${tool}" == "custota-tool" ]]; then
+      if [[ "${flag}" == "true" ]]; then
+        executable_tools+=("${tool}")
+      fi
+      continue
+    fi
+
+  done
+
+  # Authenticate the complete executable set before extracting any executable.
+  if ((${#executable_tools[@]})); then
+    bootstrap_executable_tools "${executable_tools[@]}" || return 1
+  fi
+
+  for tool in "${tools_array[@]}"; do
+    flag="$(flag_check "${tool}")"
+
+    if [[ "${tool}" == "afsr" || "${tool}" == "avbroot" || "${tool}" == "custota-tool" ]]; then
+      continue
+    fi
 
     if [[ "${flag}" == 'false' ]]; then
       echo -e "\`${tool}\` is **NOT** enabled in the configuration.\nSkipping...\n"
@@ -77,6 +100,34 @@ function check_and_download_dependencies() {
       [[ "${ADDITIONALS[RETRY]}" == "true" ]] && [[ "${RETRY}" == "true" ]] || break
     done
   fi
+}
+
+function bootstrap_executable_tools() {
+  local -a selected=("$@")
+  local report="${WORKDIR}/reports/executable-tools.json"
+
+  python3 src/bootstrap_executable_tools.py \
+    --workdir "${WORKDIR}" \
+    install \
+    --report "${report}" \
+    "${selected[@]}"
+}
+
+function resolve_executable_tool() {
+  local tool="${1}"
+
+  python3 src/bootstrap_executable_tools.py \
+    --workdir "${WORKDIR}" \
+    resolve "${tool}"
+}
+
+function run_executable_tool() {
+  local tool="${1}"
+  shift
+
+  python3 src/bootstrap_executable_tools.py \
+    --workdir "${WORKDIR}" \
+    run "${tool}" -- "$@"
 }
 
 # Function to check the flag status
@@ -252,16 +303,18 @@ function generate_keys() {
     "$(dirname "${KEYS[PKMD]}")"
 
   # Generate the AVB and OTA signing keys
-  avbroot key generate-key -o "${KEYS[AVB]}"
-  avbroot key generate-key -o "${KEYS[OTA]}"
+  run_executable_tool avbroot key generate-key -o "${KEYS[AVB]}" || return 1
+  run_executable_tool avbroot key generate-key -o "${KEYS[OTA]}" || return 1
 
   # Convert the public key portion of the AVB signing key to the AVB public key metadata format
   # This is the format that the bootloader requires when setting the custom root of trust
-  avbroot key extract-avb -k "${KEYS[AVB]}" -o "${KEYS[PKMD]}"
+  run_executable_tool avbroot key extract-avb \
+    -k "${KEYS[AVB]}" -o "${KEYS[PKMD]}" || return 1
 
   # Generate a self-signed certificate for the OTA signing key
   # This is used by recovery to verify OTA updates when sideloading
-  avbroot key generate-cert -k "${KEYS[OTA]}" -o "${KEYS[CERT_OTA]}"
+  run_executable_tool avbroot key generate-cert \
+    -k "${KEYS[OTA]}" -o "${KEYS[CERT_OTA]}" || return 1
 
   # Convert the keys to base64 which can be used in CI/CD pipeline environment
   base64_encode
@@ -444,23 +497,53 @@ PY
 
 # Function to setup the environment variables and paths for patching the OTA
 function env_setup() {
-  # Set up `my-avbroot-setup` environment
-  my_avbroot_setup
-
-  # Paths
-  local avbroot="${WORKDIR}/tools/avbroot"
-  local afsr="${WORKDIR}/tools/afsr"
-  local custota_tool="${WORKDIR}/tools/custota-tool"
   local my_avbroot_setup="${WORKDIR}/tools/my-avbroot-setup"
   local requirements_file="${my_avbroot_setup}/requirements.txt"
+  local tool flag executable variable path_prefix
+  local -a selected_tools=()
+  local -a resolved_executables=()
+  local -a executable_directories=()
 
-  # Add the paths to the PATH environment variable just so that the script can find them
-  if ! command -v avbroot &>/dev/null && ! command -v afsr &>/dev/null && ! command -v custota-tool &>/dev/null; then
-    export PATH="$(realpath ${afsr}):$(realpath ${avbroot}):$(realpath ${custota_tool}):$PATH"
+  # Restore the caller PATH from the last successful setup before resolving a
+  # new selection. Only the exact prefix injected by this function is removed.
+  unset PIXENEOS_AVBROOT_BIN PIXENEOS_AFSR_BIN PIXENEOS_CUSTOTA_TOOL_BIN
+  if [[ -n "${PIXENEOS_EXECUTABLE_PATH_PREFIX:-}" ]]; then
+    if [[ "${PATH}" == "${PIXENEOS_EXECUTABLE_PATH_PREFIX}" ]]; then
+      PATH=""
+    elif [[ "${PATH}" == "${PIXENEOS_EXECUTABLE_PATH_PREFIX}:"* ]]; then
+      PATH="${PATH#"${PIXENEOS_EXECUTABLE_PATH_PREFIX}:"}"
+    elif [[ -n "${PIXENEOS_EXECUTABLE_BASE_PATH+x}" ]]; then
+      PATH="${PIXENEOS_EXECUTABLE_BASE_PATH}"
+      export PATH
+      unset PIXENEOS_EXECUTABLE_PATH_PREFIX PIXENEOS_EXECUTABLE_BASE_PATH
+      echo "Error: executable PATH prefix changed after setup." >&2
+      return 1
+    else
+      unset PIXENEOS_EXECUTABLE_PATH_PREFIX
+      echo "Error: executable PATH tracking is incomplete." >&2
+      return 1
+    fi
+    export PATH
   fi
+  unset PIXENEOS_EXECUTABLE_PATH_PREFIX PIXENEOS_EXECUTABLE_BASE_PATH
+
+  # Resolve the complete enabled set before modifying helper source, activating
+  # an environment, or exposing any executable binding.
+  for tool in avbroot afsr custota-tool; do
+    flag="$(flag_check "${tool}")"
+    if [[ "${flag}" != "true" ]]; then
+      continue
+    fi
+    executable="$(resolve_executable_tool "${tool}")" || return 1
+    selected_tools+=("${tool}")
+    resolved_executables+=("${executable}")
+  done
+
+  # Set up `my-avbroot-setup` only after every enabled executable resolved.
+  my_avbroot_setup || return 1
 
   # Enabled python virtual environment
-  enable_venv
+  enable_venv || return 1
 
   # Install required Python packages
   if [[ -f "${requirements_file}" ]]; then
@@ -475,10 +558,33 @@ function env_setup() {
 
     if [[ "${missing_packages}" == "true" ]]; then
       echo -e "Installing required Python packages from requirements.txt..."
-      pip3 install -r "${requirements_file}"
+      pip3 install -r "${requirements_file}" || return 1
     fi
   else
     echo -e "Warning: requirements.txt not found at ${requirements_file}"
+  fi
+
+  local index
+  for index in "${!selected_tools[@]}"; do
+    tool="${selected_tools[${index}]}"
+    executable="${resolved_executables[${index}]}"
+    case "${tool}" in
+      avbroot) variable="PIXENEOS_AVBROOT_BIN" ;;
+      afsr) variable="PIXENEOS_AFSR_BIN" ;;
+      custota-tool) variable="PIXENEOS_CUSTOTA_TOOL_BIN" ;;
+    esac
+    printf -v "${variable}" '%s' "${executable}"
+    export "${variable}"
+    executable_directories+=("$(dirname -- "${executable}")")
+  done
+
+  # The pinned helper currently resolves these names through PATH. Track the
+  # exact injected prefix so a later setup can restore the caller's base PATH.
+  if ((${#executable_directories[@]})); then
+    path_prefix="$(IFS=:; echo "${executable_directories[*]}")"
+    PIXENEOS_EXECUTABLE_BASE_PATH="${PATH}"
+    PIXENEOS_EXECUTABLE_PATH_PREFIX="${path_prefix}"
+    export PATH="${path_prefix}:${PATH}"
   fi
 }
 
@@ -533,26 +639,15 @@ function url_constructor() {
   if [[ "${repository}" == "my-avbroot-setup" ]]; then
     URL="${PIXENEOS_AVBROOT_SETUP_SOURCE:-${DOMAIN}/0cwa/${repository}}"
     SIGNATURE_URL=""
+  elif [[ "${repository}" == "afsr" || "${repository}" == "avbroot" || "${repository}" == "custota-tool" ]]; then
+    echo "Error: executable tools must be acquired from the immutable lock." >&2
+    return 1
   else
-    # Afsr, avbroot, and custota-tool are binaries and are platform dependent. Modules are zipped files.
-    if [[ "${repository}" == "afsr" || "${repository}" == "avbroot" || "${repository}" == "custota-tool" ]]; then
-      local suffix="${ARCH}"
-    else
-      local suffix="release"
-    fi
+    local suffix="release"
 
-    # Custota is a special case
-    # Custota is a module and Custota-Tool is a binary
-    # Both reside in same repository
-    if [[ "${repository}" == "custota-tool" ]]; then
-      local download_page="${DOMAIN}/${user}/Custota/releases/download"
-      local version="v${VERSION[CUSTOTA]}"
-      local application="${repository}-${VERSION[CUSTOTA]}-${suffix}.zip"
-    else
-      local download_page="${DOMAIN}/${user}/${repository}/releases/download"
-      local version="v${VERSION[${repository_upper_case}]}"
-      local application="${repository}-${VERSION[${repository_upper_case}]}-${suffix}.zip"
-    fi
+    local download_page="${DOMAIN}/${user}/${repository}/releases/download"
+    local version="v${VERSION[${repository_upper_case}]}"
+    local application="${repository}-${VERSION[${repository_upper_case}]}-${suffix}.zip"
 
     URL="${download_page}/${version}/${application}"
     SIGNATURE_URL="${download_page}/${version}/${application}.sig"
@@ -603,21 +698,24 @@ function extract_official_keys() {
   # OTA: Extract META-INF/com/android/otacert from the OTA.
   #   (Or from otacerts.zip inside system.img or vendor_boot.img. All 3 files are identical.)
   local ota_zip="${WORKDIR}/${GRAPHENEOS[OTA_TARGET]}.zip"
+  local avb_info
 
   # Extract OTA
-  avbroot ota extract \
+  run_executable_tool avbroot ota extract \
     --input "${ota_zip}" \
     --directory "${WORKDIR}/extracted/extracts" \
-    --all
+    --all || return 1
 
   # Extract vbmeta.img
   # To verify, execute sha256sum avb_pkmd.bin in terminal
   # compare the output with base16-encoded verified boot key fingerprints
   # mentioned at https://grapheneos.org/articles/attestation-compatibility-guide for the respective device
-  avbroot avb info -i "${WORKDIR}/extracted/extracts/vbmeta.img" |
+  avb_info="$(run_executable_tool avbroot avb info \
+    -i "${WORKDIR}/extracted/extracts/vbmeta.img")" || return 1
+  printf '%s\n' "${avb_info}" |
     grep 'public_key' |
     sed -n 's/.*public_key: "\(.*\)".*/\1/p' |
-    tr -d '[:space:]' | xxd -r -p >"${WORKDIR}/extracted/avb_pkmd.bin"
+    tr -d '[:space:]' | xxd -r -p >"${WORKDIR}/extracted/avb_pkmd.bin" || return 1
 
   # Extract META-INF/com/android/otacert from OTA or otacerts.zip from either vendor_boot.img or system.img
   unzip "${ota_zip}" -d "${WORKDIR}/extracted/ota"
@@ -641,6 +739,7 @@ function make_directories() {
     "${WORKDIR}/modules" \
     "${WORKDIR}/signatures" \
     "${WORKDIR}/tools"
+  chmod 0700 -- "${WORKDIR}" "${WORKDIR}/.keys"
 }
 
 function generate_ota_info() {

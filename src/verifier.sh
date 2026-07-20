@@ -93,6 +93,11 @@ function verify_downloads() {
   local tool="${1}"
   local tool_path=""
 
+  if [[ "${tool}" == "afsr" || "${tool}" == "avbroot" || "${tool}" == "custota-tool" ]]; then
+    echo "Error: executable tools require immutable-lock bootstrap verification." >&2
+    return 1
+  fi
+
   echo "Verifying \`${tool}\`..."
 
   if [[ -f "${WORKDIR}/modules/${tool}.zip" ]] && [ "${tool}" != "magisk" ]; then

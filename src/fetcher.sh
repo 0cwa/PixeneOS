@@ -45,6 +45,11 @@ function get() {
 
   echo "Downloading \`${filename}\`..."
 
+  if [[ "${filename}" == "afsr" || "${filename}" == "avbroot" || "${filename}" == "custota-tool" ]]; then
+    echo "Error: executable tools require immutable-lock bootstrap verification." >&2
+    return 1
+  fi
+
   # `my-avbroot-setup` is a special case as it is a git repository
   if [[ "${filename}" == "my-avbroot-setup" ]]; then
     git clone "${url}" "${WORKDIR}/tools/${filename}" && git -C "${WORKDIR}/tools/${filename}" checkout "${VERSION[AVBROOT_SETUP]}"
@@ -65,15 +70,6 @@ function get() {
         curl -sLf "${signature_url}" --output "${WORKDIR}/signatures/${filename}.zip.sig"
       fi
 
-      # afsr, avbroot and custota-tool are binaries that need to be extracted and granted permissions
-      if [[ "${filename}" == "afsr" || "${filename}" == "avbroot" || "${filename}" == "custota-tool" ]]; then
-        echo -e "Extracting and granting permissions for \`${filename}\`..."
-        echo N | unzip -q -o "${WORKDIR}/modules/${filename}.zip" -d "${WORKDIR}/tools/${filename}"
-        chmod +x "${WORKDIR}/tools/${filename}/${filename}"
-
-        echo -e "Cleaning up..."
-        rm "${WORKDIR}/modules/${filename}.zip"
-      fi
     fi
   fi
   echo -e "\`${filename}\` downloaded."
