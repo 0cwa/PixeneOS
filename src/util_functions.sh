@@ -248,6 +248,8 @@ function create_and_make_release() {
     check_and_download_dependencies
   fi
 
+  helper_repository_preflight || return 1
+
   # Calls the download_ota function to download the OTA if not found
   download_ota
   # Calls the create_ota function to create the OTA
@@ -260,7 +262,9 @@ function create_ota() {
   # Generate output file names
   generate_ota_info
   # Setup environment variables and paths
-  env_setup
+  env_setup || return 1
+  helper_contract_preflight || return 1
+  my_avbroot_setup || return 1
   # Patch OTA with avbroot and afsr by leveraging my-avbroot-setup
   patch_ota
 }
@@ -495,6 +499,34 @@ setup_script.write_text(text.replace(old, new, 1))
 PY
 }
 
+# Verify the fetched helper is the pinned revision before downloading an OTA.
+function helper_repository_preflight() {
+  local helper_dir="${WORKDIR}/tools/my-avbroot-setup"
+  local expected="${VERSION[AVBROOT_SETUP]}"
+  local actual
+
+  actual="$(git -C "${helper_dir}" rev-parse --verify HEAD 2>/dev/null)" || {
+    echo "Error: helper repository is missing or has no commit: ${helper_dir}" >&2
+    return 1
+  }
+  if [[ "${actual}" != "${expected}" ]]; then
+    echo "Error: helper contract mismatch: expected ${expected}, got ${actual}" >&2
+    return 1
+  fi
+}
+
+# Verify the pinned helper can run after its environment is ready and before
+# rewriting helper source.
+function helper_contract_preflight() {
+  local helper_dir="${WORKDIR}/tools/my-avbroot-setup"
+
+  helper_repository_preflight || return 1
+  if ! python "${helper_dir}/patch.py" --help >/dev/null 2>&1; then
+    echo "Error: helper patch.py contract smoke check failed" >&2
+    return 1
+  fi
+}
+
 # Function to setup the environment variables and paths for patching the OTA
 function env_setup() {
   local my_avbroot_setup="${WORKDIR}/tools/my-avbroot-setup"
@@ -527,8 +559,8 @@ function env_setup() {
   fi
   unset PIXENEOS_EXECUTABLE_PATH_PREFIX PIXENEOS_EXECUTABLE_BASE_PATH
 
-  # Resolve the complete enabled set before modifying helper source, activating
-  # an environment, or exposing any executable binding.
+  # Resolve the complete enabled set before activating an environment or
+  # exposing any executable binding.
   for tool in avbroot afsr custota-tool; do
     flag="$(flag_check "${tool}")"
     if [[ "${flag}" != "true" ]]; then
@@ -538,9 +570,6 @@ function env_setup() {
     selected_tools+=("${tool}")
     resolved_executables+=("${executable}")
   done
-
-  # Set up `my-avbroot-setup` only after every enabled executable resolved.
-  my_avbroot_setup || return 1
 
   # Enabled python virtual environment
   enable_venv || return 1
@@ -739,7 +768,7 @@ function make_directories() {
     "${WORKDIR}/modules" \
     "${WORKDIR}/signatures" \
     "${WORKDIR}/tools"
-  chmod 0700 -- "${WORKDIR}" "${WORKDIR}/.keys"
+  chmod 0700 -- "${WORKDIR}" "${WORKDIR}/.keys" "${WORKDIR}/tools"
 }
 
 function generate_ota_info() {
