@@ -520,7 +520,6 @@ function helper_repository_preflight() {
 function helper_contract_preflight() {
   local helper_dir="${WORKDIR}/tools/my-avbroot-setup"
 
-  helper_repository_preflight || return 1
   if ! python "${helper_dir}/patch.py" --help >/dev/null 2>&1; then
     echo "Error: helper patch.py contract smoke check failed" >&2
     return 1

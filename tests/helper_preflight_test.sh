@@ -32,11 +32,11 @@ test_helper_version_is_pinned() {
     fail "Helper version is not pinned to the compatible commit"
 }
 
-test_helper_contract_preflight() (
-  local helper="${ROOT}/contract/tools/my-avbroot-setup"
+test_helper_repository_preflight() (
+  local helper="${ROOT}/repository/tools/my-avbroot-setup"
   local helper_head
 
-  WORKDIR="${ROOT}/contract"
+  WORKDIR="${ROOT}/repository"
   mkdir -p "${helper}"
   git -C "${helper}" init -q
   printf '#!/usr/bin/env python3\n' >"${helper}/patch.py"
@@ -44,13 +44,28 @@ test_helper_contract_preflight() (
   git -C "${helper}" -c user.name=test -c user.email=test@example.invalid commit -qm fixture
   helper_head="$(git -C "${helper}" rev-parse HEAD)"
   VERSION[AVBROOT_SETUP]="${helper_head}"
+  helper_repository_preflight
+
+  VERSION[AVBROOT_SETUP]=0000000000000000000000000000000000000000
+  if helper_repository_preflight 2>/dev/null; then
+    fail "Mismatched helper was accepted"
+  fi
+)
+
+test_helper_contract_preflight() (
+  local helper="${ROOT}/contract/tools/my-avbroot-setup"
+
+  WORKDIR="${ROOT}/contract"
+  mkdir -p "${helper}"
+  printf '#!/usr/bin/env python3\n' >"${helper}/patch.py"
+  helper_repository_preflight() { return 1; }
   python() { [[ "${1}" == "${helper}/patch.py" && "${2}" == "--help" ]]; }
 
   helper_contract_preflight
 
-  VERSION[AVBROOT_SETUP]=0000000000000000000000000000000000000000
+  python() { return 1; }
   if helper_contract_preflight 2>/dev/null; then
-    fail "Mismatched helper was accepted"
+    fail "Failed helper smoke check was reported as success"
   fi
 )
 
@@ -118,6 +133,7 @@ test_make_directories_keeps_private_paths_private() (
 )
 
 test_helper_version_is_pinned
+test_helper_repository_preflight
 test_helper_contract_preflight
 test_repository_preflight_failure_stops_before_download_and_helper_rewrite
 test_fresh_path_installs_requirements_before_smoke_and_rewrite
