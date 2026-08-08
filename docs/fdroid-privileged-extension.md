@@ -17,7 +17,8 @@ The lock and profile must be regular, non-symlink files inside the checkout,
 tracked by Git, and byte-identical to their versions in `HEAD`. Optional
 `FDROID_PRIVILEGED_EXTENSION_CACHE` and
 `FDROID_PRIVILEGED_EXTENSION_PATCH_REPORT` values select local cache and report
-paths. The cache defaults under `.tmp`; the report defaults next to the patched
+paths. When `WORKDIR=.tmp`, the cache defaults to `.tmp/locked-artifacts`; the
+report defaults next to the patched
 OTA as `<patched-output>.patch-report.json` so ordinary work-directory cleanup
 does not discard the audit record.
 

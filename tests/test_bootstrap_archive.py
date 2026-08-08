@@ -407,12 +407,24 @@ class BootstrapArchiveTest(unittest.TestCase):
                         with self.assertRaises(BootstrapError):
                             with open_sealed_executable(source, layout[0]):
                                 self.fail("unsealed executable was yielded")
-        self.assertEqual(len(captured), 1)
-        with self.assertRaises(OSError):
-            os.fstat(captured[0])
+                self.assertEqual(len(captured), 1)
+                with self.assertRaises(OSError):
+                    fcntl.fcntl(captured[0], fcntl.F_GETFD)
 
     def test_sealed_memfd_executes_a_real_native_binary(self) -> None:
-        payload = Path("/usr/bin/true").read_bytes()
+        true_path = next(
+            (
+                candidate
+                for candidate in (Path("/usr/bin/true"), Path("/bin/true"))
+                if candidate.exists()
+            ),
+            None,
+        )
+        if true_path is None:
+            self.skipTest("native true binary is unavailable")
+        if os.execve not in os.supports_fd:
+            self.skipTest("fd-based execve is unavailable")
+        payload = true_path.read_bytes()
         layout = [locked_member("tool", payload)]
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary) / "installed"

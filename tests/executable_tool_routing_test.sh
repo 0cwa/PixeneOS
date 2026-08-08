@@ -130,6 +130,7 @@ test_env_setup_resolves_only_enabled_executables() (
   }
 
   mkdir -p "${WORKDIR}/tools/my-avbroot-setup"
+  : >"${WORKDIR}/tools/my-avbroot-setup/requirements.txt"
   env_setup >/dev/null
 
   assert_file_equals $'avbroot\ncustota-tool' "${root}/resolved"
@@ -168,6 +169,7 @@ test_env_setup_resolve_failure_is_transactional() (
   }
 
   mkdir -p "${WORKDIR}/tools/my-avbroot-setup"
+  : >"${WORKDIR}/tools/my-avbroot-setup/requirements.txt"
   set +e
   env_setup >/dev/null
   result=$?
@@ -209,6 +211,7 @@ test_repeated_env_setup_removes_disabled_tool_bindings() (
   }
 
   mkdir -p "${WORKDIR}/tools/my-avbroot-setup"
+  : >"${WORKDIR}/tools/my-avbroot-setup/requirements.txt"
   env_setup >/dev/null
   [[ "${PATH}" == "/opt/pixene/by-sha256/${avb_digest}:/opt/pixene/by-sha256/${afsr_digest}:${old_path}" ]] ||
     fail "Initial executable PATH was not constructed as expected"
@@ -227,13 +230,14 @@ test_repeated_env_setup_removes_disabled_tool_bindings() (
 test_runner_constructs_exact_fd_bound_command() (
   local root="${TEST_ROOT}/runner-command"
   WORKDIR="${root}/work"
+  local repository_root="$(pwd -P)"
 
   mkdir -p "${root}"
   python3() { printf '%s\n' "$*" >"${root}/python-args"; }
   run_executable_tool avbroot key generate-key -o "/output/key"
 
   assert_file_equals \
-    "src/bootstrap_executable_tools.py --workdir ${WORKDIR} run avbroot -- key generate-key -o /output/key" \
+    "${repository_root}/src/bootstrap_executable_tools.py --workdir ${WORKDIR} run avbroot -- key generate-key -o /output/key" \
     "${root}/python-args"
 )
 

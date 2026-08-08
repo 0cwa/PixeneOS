@@ -226,7 +226,9 @@ remove_expected_modules() {
       fi
     done
 
-    [[ "${remove}" == "false" ]] && filtered+=("${value}")
+    if [[ "${remove}" == "false" ]]; then
+      filtered+=("${value}")
+    fi
   done
 
   EXPECTED_ARGS=("${filtered[@]}")
@@ -500,11 +502,15 @@ test_fdroid_locked_paths_survive_cleanup_and_quoting() {
 
 test_fdroid_enabled_does_not_reuse_legacy_output_marker() {
   reset_fixture fdroid-legacy-marker
-  ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]="true"
+  enable_fdroid_fixture
   touch -- "${WORKDIR}/${GRAPHENEOS[OTA_TARGET]}.patched*.zip"
 
-  assert_patch_fails_before_execution "enabled F-Droid legacy marker"
-  assert_prepare_stages "enabled F-Droid legacy marker"
+  run_patch
+  assert_prepare_stages \
+    "enabled F-Droid legacy marker" \
+    resolve artifacts-fetch artifacts-verify
+  assert_pair "--output" "${OUTPUTS[PATCHED_OTA]}" \
+    "enabled F-Droid legacy marker"
 }
 
 test_default_arguments

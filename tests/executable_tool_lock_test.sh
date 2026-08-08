@@ -144,6 +144,12 @@ elif case.startswith("missing_"):
     }
     target, key = targets[case]
     del target[key]
+elif case == "noncanonical_json_form":
+    pathlib.Path(output).write_text(
+        json.dumps(data, indent=4, sort_keys=False) + "\n",
+        encoding="utf-8",
+    )
+    raise SystemExit(0)
 else:
     raise SystemExit(f"unknown mutation case: {case}")
 
@@ -195,12 +201,12 @@ expected = {
         ),
     },
     "custota-tool": {
-        "version": "6.2",
-        "artifact": "custota-tool-6.2-x86_64-unknown-linux-gnu.zip",
+        "version": "6.4",
+        "artifact": "custota-tool-6.4-x86_64-unknown-linux-gnu.zip",
         "layout": {"custota-tool": "0755"},
         "url": (
             "https://github.com/chenxiaolong/Custota/releases/download/"
-            "v6.2/custota-tool-6.2-x86_64-unknown-linux-gnu.zip"
+            "v6.4/custota-tool-6.4-x86_64-unknown-linux-gnu.zip"
         ),
     },
 }
@@ -320,6 +326,7 @@ test_invalid_locks_fail_closed() {
     missing_executable_size
     missing_executable_hash
     missing_executable_mode
+    noncanonical_json_form
   )
 
   for case_name in "${cases[@]}"; do

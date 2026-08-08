@@ -82,6 +82,20 @@ test_lineageos_v2_metadata() (
       fail "unexpected LineageOS metadata URL: ${url}"
     printf '%s\n' '[
       {
+        "date": "2026-07-16",
+        "datetime": 1784185320,
+        "files": [
+          {
+            "filename": "lineage-23.2-20260716-nightly-pdx235-signed.zip",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "type": "nightly",
+            "url": "https://mirrorbits.lineageos.org/full/pdx235/20260716/lineage-23.2-20260716-nightly-pdx235-signed.zip"
+          }
+        ],
+        "type": "nightly",
+        "version": "23.2"
+      },
+      {
         "date": "2026-07-17",
         "datetime": 1784271720,
         "files": [

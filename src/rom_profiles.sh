@@ -55,16 +55,24 @@ function resolve_rom_profile() {
 
   if [[ -n "${ADDITIONALS_MAS_COMPATIBLE_SEPOLICY:-}" ]]; then
     ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]="${ADDITIONALS_MAS_COMPATIBLE_SEPOLICY}"
+  elif [[ "${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]:-}" != 'true' &&
+    "${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]:-}" != 'false' ]]; then
+    : # Preserve a direct invalid value so the validation below rejects it.
   else
     ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]="${ROM_PROFILE[DEFAULT_COMPATIBLE_SEPOLICY]}"
   fi
 
   _require_profile_boolean \
     ADDITIONALS_MAS_COMPATIBLE_SEPOLICY \
-    "${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}"
+    "${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}" || return 1
   _require_profile_boolean \
     ROM_PROFILE_CLEAR_VBMETA_FLAGS \
-    "${ROM_PROFILE[CLEAR_VBMETA_FLAGS]}"
+    "${ROM_PROFILE[CLEAR_VBMETA_FLAGS]}" || return 1
+  if [[ ! "${GRAPHENEOS[UPDATE_CHANNEL]}" =~ ^[a-z0-9]+([_-][a-z0-9]+)*$ ||
+    ! "${GRAPHENEOS[UPDATE_TYPE]}" =~ ^[a-z0-9]+([_-][a-z0-9]+)*$ ]]; then
+    echo "Error: invalid ROM update channel or type." >&2
+    return 1
+  fi
 }
 
 function enforce_output_policy() {
@@ -115,7 +123,11 @@ function _locked_input_digest() {
     source src/verifier.sh
   fi
   verify_checked_in_locked_input "${input_path}" || return 1
-  sha256sum -- "${input_path}" | awk '{print $1}'
+  local digest
+  digest="$(sha256sum -- "${input_path}")" || return 1
+  digest="${digest%% *}"
+  [[ "${digest}" =~ ^[0-9a-f]{64}$ ]] || return 1
+  printf '%s\n' "${digest}"
 }
 
 function module_selection_fingerprint() {
@@ -166,6 +178,8 @@ function module_selection_fingerprint() {
     printf '%s\n' \
       'pixene-module-selection-v1' \
       "rom_family=${ROM_FAMILY}" \
+      "update_channel=${GRAPHENEOS[UPDATE_CHANNEL]}" \
+      "update_type=${GRAPHENEOS[UPDATE_TYPE]}" \
       "output_scope=${OUTPUT_SCOPE}" \
       "root=${ADDITIONALS[ROOT]}" \
       "magisk_preinit=${magisk_preinit}" \

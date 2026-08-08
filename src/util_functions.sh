@@ -11,6 +11,18 @@ source src/verifier.sh
 source src/debug_module_setup.sh
 source src/rom_profiles.sh
 
+declare -a LOCKED_EXECUTABLE_TOOLS=(avbroot afsr custota-tool)
+
+function is_locked_executable_tool() {
+  local candidate="${1}"
+  local locked_tool
+
+  for locked_tool in "${LOCKED_EXECUTABLE_TOOLS[@]}"; do
+    [[ "${candidate}" == "${locked_tool}" ]] && return 0
+  done
+  return 1
+}
+
 # Function to check and download the dependencies
 # This function checks for the required tools and downloads them if not found depending on the configuration done in the declarations file
 function check_and_download_dependencies() {
@@ -42,7 +54,7 @@ function check_and_download_dependencies() {
   for tool in "${tools_array[@]}"; do
     flag="$(flag_check "${tool}")"
 
-    if [[ "${tool}" == "afsr" || "${tool}" == "avbroot" || "${tool}" == "custota-tool" ]]; then
+    if is_locked_executable_tool "${tool}"; then
       if [[ "${flag}" == "true" ]]; then
         executable_tools+=("${tool}")
       fi
@@ -59,7 +71,7 @@ function check_and_download_dependencies() {
   for tool in "${tools_array[@]}"; do
     flag="$(flag_check "${tool}")"
 
-    if [[ "${tool}" == "afsr" || "${tool}" == "avbroot" || "${tool}" == "custota-tool" ]]; then
+    if is_locked_executable_tool "${tool}"; then
       continue
     fi
 
@@ -106,7 +118,7 @@ function bootstrap_executable_tools() {
   local -a selected=("$@")
   local report="${WORKDIR}/reports/executable-tools.json"
 
-  python3 src/bootstrap_executable_tools.py \
+  python3 "$(git rev-parse --show-toplevel)/src/bootstrap_executable_tools.py" \
     --workdir "${WORKDIR}" \
     install \
     --report "${report}" \
@@ -116,7 +128,7 @@ function bootstrap_executable_tools() {
 function resolve_executable_tool() {
   local tool="${1}"
 
-  python3 src/bootstrap_executable_tools.py \
+  python3 "$(git rev-parse --show-toplevel)/src/bootstrap_executable_tools.py" \
     --workdir "${WORKDIR}" \
     resolve "${tool}"
 }
@@ -125,7 +137,7 @@ function run_executable_tool() {
   local tool="${1}"
   shift
 
-  python3 src/bootstrap_executable_tools.py \
+  python3 "$(git rev-parse --show-toplevel)/src/bootstrap_executable_tools.py" \
     --workdir "${WORKDIR}" \
     run "${tool}" -- "$@"
 }
@@ -248,9 +260,7 @@ function create_and_make_release() {
     check_and_download_dependencies
   fi
 
-  # Calls the download_ota function to download the OTA if not found
-  download_ota
-  # Calls the create_ota function to create the OTA
+  # Calls the create_ota function to prepare, download, and patch the OTA.
   create_ota
 }
 
@@ -259,8 +269,11 @@ function create_ota() {
 
   # Generate output file names
   generate_ota_info
-  # Setup environment variables and paths
-  env_setup
+  # Prepare and validate the helper before spending time downloading the OTA.
+  env_setup || return 1
+  helper_contract_preflight || return 1
+  # Download the OTA if not found, then patch it.
+  download_ota
   # Patch OTA with avbroot and afsr by leveraging my-avbroot-setup
   patch_ota
 }
@@ -325,7 +338,7 @@ function generate_keys() {
 # This function does a lot of things before patching the OTA
 function patch_ota() {
   if [[ -z "${ROM_PROFILE[PROVIDER]:-}" ]]; then
-    resolve_rom_profile
+    resolve_rom_profile || return 1
   fi
 
   if [[ "${INTERACTIVE_MODE}" != 'true' ]]; then
@@ -342,8 +355,8 @@ function patch_ota() {
   local -a locked_module_args=()
 
   # Activate the virtual environment
-  if [ -z "${VIRTUAL_ENV}" ]; then
-    enable_venv
+  if [ -z "${VIRTUAL_ENV:-}" ]; then
+    enable_venv || return 1
   fi
 
   # Locked module artifacts must be resolved, fetched, and verified before any
@@ -365,8 +378,8 @@ function patch_ota() {
   # Legacy output markers do not encode a locked module selection. Never reuse
   # one for an enabled F-Droid build.
   if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" != 'true' ]] &&
-    ls "${ota_zip}.patched*.zip" 1>/dev/null 2>&1; then
-    echo -e "File ${ota_zip}.pathed.zip already exists in local. Patch skipped."
+    [[ -f "${OUTPUTS[PATCHED_OTA]}" ]]; then
+    echo -e "File ${OUTPUTS[PATCHED_OTA]} already exists locally. Patch skipped."
   else
     echo -e "Patching OTA..."
     local args=()
@@ -436,7 +449,7 @@ function patch_ota() {
     fi
     
     # Python command to run the patch script
-    python "${my_avbroot_setup}/patch.py" "${args[@]}"
+    python "${my_avbroot_setup}/patch.py" "${args[@]}" || return 1
   fi
 
   # Deactivate the virtual environment after patching the OTA
@@ -476,6 +489,16 @@ function my_avbroot_setup() {
   # Add support to pass env-vars to the setup script for passphrase in the CI/CD pipeline
   echo -e "Running script modifications..."
 
+  # Setup may run more than once across recovery and patching paths. The
+  # replacement is intentionally idempotent.
+  [[ -f "${setup_script}" ]] || {
+    echo "Error: helper patch script is missing: ${setup_script}" >&2
+    return 1
+  }
+  if ! grep -Fq 'generate_update_info(update_info, args.output.name)' "${setup_script}"; then
+    return 0
+  fi
+
   # Update location path to use GitHub releases. Use Python's repr() for the
   # inserted URL so shell/sed metacharacters in user-provided URLs remain data.
   python3 - "${setup_script}" "${location_path}" <<'PY'
@@ -495,10 +518,32 @@ setup_script.write_text(text.replace(old, new, 1))
 PY
 }
 
+# Verify the fetched helper is the pinned contract and can import its CLI
+# before an OTA download or any publishing path is reached.
+function helper_contract_preflight() {
+  local helper_dir="${WORKDIR}/tools/my-avbroot-setup"
+  local expected="${VERSION[AVBROOT_SETUP]}"
+  local actual
+
+  actual="$(git -C "${helper_dir}" rev-parse --verify HEAD 2>/dev/null)" || {
+    echo "Error: helper repository is missing or has no commit: ${helper_dir}" >&2
+    return 1
+  }
+  if [[ "${actual}" != "${expected}" ]]; then
+    echo "Error: helper contract mismatch: expected ${expected}, got ${actual}" >&2
+    return 1
+  fi
+  if ! python "${helper_dir}/patch.py" --help >/dev/null 2>&1; then
+    echo "Error: helper patch.py contract smoke check failed" >&2
+    return 1
+  fi
+}
+
 # Function to setup the environment variables and paths for patching the OTA
 function env_setup() {
   local my_avbroot_setup="${WORKDIR}/tools/my-avbroot-setup"
   local pyproject_file="${my_avbroot_setup}/pyproject.toml"
+  local requirements_file="${my_avbroot_setup}/requirements.txt"
   local tool flag executable variable path_prefix
   local -a selected_tools=()
   local -a resolved_executables=()
@@ -529,7 +574,7 @@ function env_setup() {
 
   # Resolve the complete enabled set before modifying helper source, activating
   # an environment, or exposing any executable binding.
-  for tool in avbroot afsr custota-tool; do
+  for tool in "${LOCKED_EXECUTABLE_TOOLS[@]}"; do
     flag="$(flag_check "${tool}")"
     if [[ "${flag}" != "true" ]]; then
       continue
@@ -554,8 +599,12 @@ function env_setup() {
 
     echo -e "Installing required Python packages from pyproject.toml..."
     uv pip install -r "${pyproject_file}" || return 1
+  elif [[ -f "${requirements_file}" ]]; then
+    echo -e "Installing required Python packages from requirements.txt..."
+    python -m pip install -r "${requirements_file}" || return 1
   else
-    echo -e "Warning: pyproject.toml not found at ${my_avbroot_setup}"
+    echo "Error: helper has neither pyproject.toml nor requirements.txt: ${my_avbroot_setup}" >&2
+    return 1
   fi
 
   local index
@@ -612,11 +661,12 @@ function enable_venv() {
   fi
 
   # Ensure venv_path is set correctly and activate the virtual environment
-  if [ -f "${venv_path}" ]; then
-    source "${venv_path}"
-  else
+  if [[ ! -f "${venv_path}" ]]; then
     echo -e "Virtual environment activation script not found at \`${venv_path}\`."
+    return 1
   fi
+  source "${venv_path}" || return 1
+  [[ -n "${VIRTUAL_ENV:-}" ]]
 }
 
 # Construct URL for the tools and download them
@@ -633,7 +683,7 @@ function url_constructor() {
   if [[ "${repository}" == "my-avbroot-setup" ]]; then
     URL="${PIXENEOS_AVBROOT_SETUP_SOURCE:-${DOMAIN}/0cwa/${repository}}"
     SIGNATURE_URL=""
-  elif [[ "${repository}" == "afsr" || "${repository}" == "avbroot" || "${repository}" == "custota-tool" ]]; then
+  elif is_locked_executable_tool "${repository}"; then
     echo "Error: executable tools must be acquired from the immutable lock." >&2
     return 1
   else
@@ -706,10 +756,11 @@ function extract_official_keys() {
   # mentioned at https://grapheneos.org/articles/attestation-compatibility-guide for the respective device
   avb_info="$(run_executable_tool avbroot avb info \
     -i "${WORKDIR}/extracted/extracts/vbmeta.img")" || return 1
-  printf '%s\n' "${avb_info}" |
-    grep 'public_key' |
-    sed -n 's/.*public_key: "\(.*\)".*/\1/p' |
-    tr -d '[:space:]' | xxd -r -p >"${WORKDIR}/extracted/avb_pkmd.bin" || return 1
+  local public_key_hex
+  public_key_hex="$(printf '%s\n' "${avb_info}" | sed -n 's/.*public_key: "\(.*\)".*/\1/p' | tr -d '[:space:]')" || return 1
+  [[ -n "${public_key_hex}" ]] || return 1
+  printf '%s' "${public_key_hex}" | xxd -r -p >"${WORKDIR}/extracted/avb_pkmd.bin" || return 1
+  [[ -s "${WORKDIR}/extracted/avb_pkmd.bin" ]] || return 1
 
   # Extract META-INF/com/android/otacert from OTA or otacerts.zip from either vendor_boot.img or system.img
   unzip "${ota_zip}" -d "${WORKDIR}/extracted/ota"
@@ -737,7 +788,7 @@ function make_directories() {
 }
 
 function generate_ota_info() {
-  validate_device_name
+  validate_device_name || return 1
 
   # Detect build flavor
   local flavor=$([[ ${ADDITIONALS[ROOT]} == 'true' ]] && echo "magisk-${VERSION[MAGISK]}" || echo "rootless")
@@ -747,7 +798,7 @@ function generate_ota_info() {
     debug_suffix="-debug-adb"
   fi
 
-  module_selection_fingerprint >/dev/null
+  module_selection_fingerprint >/dev/null || return 1
   # Debug builds are intentionally labeled. The stable selection fingerprint
   # prevents otherwise identical ROM/profile variants from colliding.
   OUTPUTS[PATCHED_OTA]="${DEVICE_NAME}-${VERSION[GRAPHENEOS]}-${flavor}${debug_suffix}-${MODULE_SELECTION_FINGERPRINT}-$(git rev-parse --short HEAD)$(dirty_suffix).zip"

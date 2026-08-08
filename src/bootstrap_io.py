@@ -9,7 +9,7 @@ from pathlib import Path
 import secrets
 import stat
 import subprocess
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, NoReturn
 import urllib.parse
 import urllib.request
 
@@ -22,18 +22,54 @@ SYSTEM_GIT = Path("/usr/bin/git")
 SYSTEM_SSH_KEYGEN = Path("/usr/bin/ssh-keygen")
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise BootstrapError(message)
 
 
 def ensure_private_directory(path: Path) -> None:
+    absolute = Path(os.path.abspath(path))
+    anchors = {
+        Path("/"),
+        Path("/tmp"),
+        Path("/var/tmp"),
+        Path.cwd(),
+        Path(__file__).resolve().parents[1],
+    }
+    matching_anchors = [
+        anchor
+        for anchor in anchors
+        if absolute == anchor or anchor in absolute.parents
+    ]
+    if not matching_anchors:
+        fail("bootstrap directory is outside an allowed private path")
+    anchor = max(matching_anchors, key=lambda candidate: len(candidate.parts))
     try:
-        path.mkdir(mode=0o700, parents=True, exist_ok=True)
-        info = path.lstat()
+        relative = absolute.relative_to(anchor)
+    except ValueError:
+        fail("bootstrap directory is outside an allowed private path")
+
+    current = anchor
+    try:
+        for name in relative.parts:
+            current /= name
+            try:
+                current.mkdir(mode=0o700)
+            except FileExistsError:
+                pass
+            info = current.lstat()
+            if not stat.S_ISDIR(info.st_mode) or stat.S_IMODE(info.st_mode) & 0o077:
+                fail("bootstrap directory is not a private real directory")
     except OSError as exc:
         fail(f"cannot create private bootstrap directory: {exc.strerror or exc}")
-    if not stat.S_ISDIR(info.st_mode) or stat.S_IMODE(info.st_mode) & 0o077:
-        fail("bootstrap directory is not a private real directory")
+
+
+GIT_ENVIRONMENT = {
+    "PATH": "/usr/bin:/bin",
+    "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_CONFIG_GLOBAL": os.devnull,
+    "GIT_CONFIG_SYSTEM": os.devnull,
+    "GIT_OPTIONAL_LOCKS": "0",
+}
 
 
 def fsync_directory(path: Path) -> None:
@@ -77,13 +113,18 @@ def committed_bytes(path: Path, captured: bytes) -> None:
     """Require captured policy bytes to equal the clean HEAD blob."""
     if not SYSTEM_GIT.is_file() or SYSTEM_GIT.is_symlink():
         fail("the system Git verifier is unavailable")
-    repository = subprocess.run(
-        [str(SYSTEM_GIT), "-C", str(path.parent), "rev-parse", "--show-toplevel"],
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        text=True,
-    )
+    try:
+        repository = subprocess.run(
+            [str(SYSTEM_GIT), "-C", str(path.parent), "rev-parse", "--show-toplevel"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            env=GIT_ENVIRONMENT,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        fail("Git repository discovery timed out")
     if repository.returncode != 0:
         fail("bootstrap policy is not inside a Git checkout")
     root = Path(repository.stdout.strip()).resolve()
@@ -92,12 +133,17 @@ def committed_bytes(path: Path, captured: bytes) -> None:
         relative = resolved.relative_to(root).as_posix()
     except ValueError:
         fail("bootstrap policy is outside the repository")
-    blob = subprocess.run(
-        [str(SYSTEM_GIT), "-C", str(root), "show", f"HEAD:{relative}"],
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-    )
+    try:
+        blob = subprocess.run(
+            [str(SYSTEM_GIT), "-C", str(root), "show", f"HEAD:{relative}"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env=GIT_ENVIRONMENT,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        fail("Git committed-blob verification timed out")
     if blob.returncode != 0 or blob.stdout != captured:
         fail("bootstrap policy must exactly match its committed HEAD blob")
 
@@ -192,15 +238,20 @@ def verify_ssh_signature(
         "-s",
         f"/proc/self/fd/{signature.fileno()}",
     ]
-    result = subprocess.run(
-        command,
-        stdin=archive,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        close_fds=True,
-        pass_fds=(signature.fileno(), trust.fileno()),
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            command,
+            stdin=archive,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+            pass_fds=(signature.fileno(), trust.fileno()),
+            check=False,
+            env={"PATH": "/usr/bin:/bin"},
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        fail("OpenSSH signature verification timed out")
     archive.seek(0)
     signature.seek(0)
     trust.seek(0)
