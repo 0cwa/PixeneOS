@@ -784,7 +784,7 @@ function make_directories() {
     "${WORKDIR}/modules" \
     "${WORKDIR}/signatures" \
     "${WORKDIR}/tools"
-  chmod 0700 -- "${WORKDIR}" "${WORKDIR}/.keys"
+  chmod 0700 -- "${WORKDIR}" "${WORKDIR}/.keys" "${WORKDIR}/tools"
 }
 
 function generate_ota_info() {

@@ -51,7 +51,17 @@ test_helper_contract_preflight() (
   if helper_contract_preflight 2>/dev/null; then fail "mismatched helper was accepted"; fi
 )
 
+test_make_directories_keeps_bootstrap_tools_private() (
+  WORKDIR="${ROOT}/private-workdir"
+
+  make_directories
+
+  [[ "$(stat -c '%a' "${WORKDIR}/tools")" == "700" ]] ||
+    fail "bootstrap tools directory is not private"
+)
+
 test_dependency_format_selection
 test_missing_dependency_manifests_fail
 test_helper_contract_preflight
+test_make_directories_keeps_bootstrap_tools_private
 echo "helper preflight tests: ok"
