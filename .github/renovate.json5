@@ -20,7 +20,7 @@
       matchStrings: [
         'VERSION\\[AVBROOT_SETUP\\]=\\"(?<currentDigest>.*?)\\"',
       ],
-      depNameTemplate: "https://github.com/chenxiaolong/my-avbroot-setup.git",
+      depNameTemplate: "https://github.com/0cwa/my-avbroot-setup.git",
       datasourceTemplate: "git-refs",
       currentValueTemplate: "master",
       versioningTemplate: "sha",

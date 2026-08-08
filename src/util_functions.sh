@@ -498,7 +498,7 @@ PY
 # Function to setup the environment variables and paths for patching the OTA
 function env_setup() {
   local my_avbroot_setup="${WORKDIR}/tools/my-avbroot-setup"
-  local requirements_file="${my_avbroot_setup}/requirements.txt"
+  local pyproject_file="${my_avbroot_setup}/pyproject.toml"
   local tool flag executable variable path_prefix
   local -a selected_tools=()
   local -a resolved_executables=()
@@ -545,23 +545,17 @@ function env_setup() {
   # Enabled python virtual environment
   enable_venv || return 1
 
-  # Install required Python packages
-  if [[ -f "${requirements_file}" ]]; then
-    local missing_packages=false
-    while read -r package; do
-      [[ -z "${package}" ]] && continue
-      if ! pip list | grep -i "^${package%%[=><]*}" &>/dev/null; then
-        missing_packages=true
-        break
-      fi
-    done <"${requirements_file}"
-
-    if [[ "${missing_packages}" == "true" ]]; then
-      echo -e "Installing required Python packages from requirements.txt..."
-      pip3 install -r "${requirements_file}" || return 1
+  # Install required Python packages from the maintained helper's pyproject.
+  if [[ -f "${pyproject_file}" ]]; then
+    if ! command -v uv &>/dev/null; then
+      echo -e "uv not found. Installing..."
+      python3 -m pip install uv || return 1
     fi
+
+    echo -e "Installing required Python packages from pyproject.toml..."
+    uv pip install -r "${pyproject_file}" || return 1
   else
-    echo -e "Warning: requirements.txt not found at ${requirements_file}"
+    echo -e "Warning: pyproject.toml not found at ${my_avbroot_setup}"
   fi
 
   local index
