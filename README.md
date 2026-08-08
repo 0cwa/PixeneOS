@@ -385,7 +385,7 @@ Third-party-derived code, dependencies, modules, tools, release artifacts, and d
   - [BCR](https://github.com/chenxiaolong/BCR)
   - [Custota](https://github.com/chenxiaolong/Custota)
   - [MSD](https://github.com/chenxiaolong/MSD)
-  - [my-avbroot-setup](https://github.com/chenxiaolong/my-avbroot-setup)
+  - [my-avbroot-setup](https://github.com/0cwa/my-avbroot-setup)
   - [OEMUnlockOnBoot](https://github.com/chenxiaolong/OEMUnlockOnBoot)
 - [Rooted-Graphene](https://github.com/schnatterer/rooted-graphene) -- for motivation and inspiration
 
