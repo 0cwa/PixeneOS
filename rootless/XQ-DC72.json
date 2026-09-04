@@ -1,7 +1,7 @@
 {
   "version": 2,
   "full": {
-    "location_ota": "https://github.com/0cwa/PixeneOS/releases/download/20260828/pdx235-20260828-rootless-588473e.zip",
-    "location_csig": "https://github.com/0cwa/PixeneOS/releases/download/20260828/pdx235-20260828-rootless-588473e.zip.csig"
+    "location_ota": "https://github.com/0cwa/PixeneOS/releases/download/20260904/pdx235-20260904-rootless-588473e.zip",
+    "location_csig": "https://github.com/0cwa/PixeneOS/releases/download/20260904/pdx235-20260904-rootless-588473e.zip.csig"
   }
 }
