@@ -227,13 +227,14 @@ test_repeated_env_setup_removes_disabled_tool_bindings() (
 test_runner_constructs_exact_fd_bound_command() (
   local root="${TEST_ROOT}/runner-command"
   WORKDIR="${root}/work"
+  local repository_root="$(pwd -P)"
 
   mkdir -p "${root}"
   python3() { printf '%s\n' "$*" >"${root}/python-args"; }
   run_executable_tool avbroot key generate-key -o "/output/key"
 
   assert_file_equals \
-    "src/bootstrap_executable_tools.py --workdir ${WORKDIR} run avbroot -- key generate-key -o /output/key" \
+    "${repository_root}/src/bootstrap_executable_tools.py --workdir ${WORKDIR} run avbroot -- key generate-key -o /output/key" \
     "${root}/python-args"
 )
 

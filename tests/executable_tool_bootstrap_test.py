@@ -353,7 +353,9 @@ class BootstrapRuntimeTest(unittest.TestCase):
         bootstrapper.install(sorted(self.tools), self.report_path())
         source_environment = {
             "PATH": "/custom/bin",
-            "SIGNING_PASSPHRASE": "preserved secret",
+            "PASSPHRASE_AVB": "avb secret",
+            "PASSPHRASE_OTA": "ota secret",
+            "SIGNING_PASSPHRASE": "unapproved secret",
             "LD_PRELOAD": "/untrusted/inject.so",
             "DYLD_INSERT_LIBRARIES": "/untrusted/inject.dylib",
             "GLIBC_TUNABLES": "glibc.malloc.check=3",
@@ -388,7 +390,9 @@ class BootstrapRuntimeTest(unittest.TestCase):
         environment = observed["environment"]
         assert isinstance(environment, dict)
         self.assertEqual(environment["PATH"], "/custom/bin")
-        self.assertEqual(environment["SIGNING_PASSPHRASE"], "preserved secret")
+        self.assertEqual(environment["PASSPHRASE_AVB"], "avb secret")
+        self.assertEqual(environment["PASSPHRASE_OTA"], "ota secret")
+        self.assertNotIn("SIGNING_PASSPHRASE", environment)
         for forbidden in (
             "LD_PRELOAD",
             "DYLD_INSERT_LIBRARIES",
@@ -449,9 +453,12 @@ class BootstrapRuntimeTest(unittest.TestCase):
                     bootstrapper.run("fixture-a", [], {})
         execve.assert_not_called()
 
-        with mock.patch("bootstrap_executable_tools.os.execve") as execve:
-            with self.assertRaises(BootstrapError):
-                bootstrapper.run("fixture-a", ["bad\x00argument"], {})
+        with mock.patch(
+            "bootstrap_executable_tools.fd_exec_supported", return_value=True
+        ):
+            with mock.patch("bootstrap_executable_tools.os.execve") as execve:
+                with self.assertRaises(BootstrapError):
+                    bootstrapper.run("fixture-a", ["bad\x00argument"], {})
         execve.assert_not_called()
 
         with mock.patch(

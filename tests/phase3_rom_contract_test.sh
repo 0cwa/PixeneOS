@@ -82,6 +82,16 @@ test_unknown_rom_fails_closed() (
   fi
 )
 
+test_invalid_compatible_sepolicy_fails_closed() (
+  load_contract
+  ROM_FAMILY="grapheneos"
+  ADDITIONALS_MAS_COMPATIBLE_SEPOLICY="yes"
+
+  if resolve_rom_profile >/dev/null 2>&1; then
+    fail "invalid compatible-SEPolicy value unexpectedly resolved"
+  fi
+)
+
 set_selection_fixture() {
   ROM_FAMILY="grapheneos"
   ADDITIONALS[ROOT]="false"
@@ -198,6 +208,7 @@ test_output_policy() (
 
 test_profiles_are_stable
 test_unknown_rom_fails_closed
+test_invalid_compatible_sepolicy_fails_closed
 test_selection_fingerprint
 test_output_filename_contains_fingerprint
 test_output_policy

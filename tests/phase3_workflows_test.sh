@@ -158,6 +158,10 @@ test_manual_build_only_acceptance() {
     "${acceptance}" \
     'workflow_dispatch:' \
     "acceptance workflow must be manually dispatched"
+  assert_contains \
+    "${acceptance}" \
+    '^[[:space:]]*contents:[[:space:]]*write[[:space:]]*$' \
+    "acceptance workflow must grant contents write permission"
 }
 
 test_no_lineage_checkout_anywhere() {

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import errno
 import fcntl
 import hashlib
 import os
@@ -11,7 +12,7 @@ from pathlib import Path, PurePosixPath
 import posixpath
 import stat
 import struct
-from typing import Any, BinaryIO, Iterator
+from typing import Any, BinaryIO, Iterator, NoReturn
 import zipfile
 
 
@@ -26,7 +27,7 @@ class BootstrapError(Exception):
     """Raised when executable bootstrap data fails closed."""
 
 
-def _fail(message: str) -> None:
+def _fail(message: str) -> NoReturn:
     raise BootstrapError(message)
 
 
@@ -381,54 +382,68 @@ def open_sealed_executable(source_fd: int, entry: dict[str, Any]) -> Iterator[in
     except OSError:
         _fail("cannot create a sealed executable")
     try:
-        os.lseek(source_fd, 0, os.SEEK_SET)
-        digest = hashlib.sha256()
-        count = 0
-        while True:
-            chunk = os.read(source_fd, READ_CHUNK)
-            if not chunk:
-                break
-            count += len(chunk)
-            if count > entry["size"]:
-                _fail("executable copy exceeds its locked size")
-            digest.update(chunk)
-            view = memoryview(chunk)
-            while view:
-                written = os.write(descriptor, view)
-                if written <= 0:
-                    _fail("short sealed executable write")
-                view = view[written:]
-        if count != entry["size"] or digest.hexdigest() != entry["sha256"]:
-            _fail("sealed executable source does not match the lock")
+        try:
+            os.lseek(source_fd, 0, os.SEEK_SET)
+            digest = hashlib.sha256()
+            count = 0
+            while True:
+                chunk = os.read(source_fd, READ_CHUNK)
+                if not chunk:
+                    break
+                count += len(chunk)
+                if count > entry["size"]:
+                    _fail("executable copy exceeds its locked size")
+                digest.update(chunk)
+                view = memoryview(chunk)
+                while view:
+                    written = os.write(descriptor, view)
+                    if written <= 0:
+                        _fail("short sealed executable write")
+                    view = view[written:]
+            if count != entry["size"] or digest.hexdigest() != entry["sha256"]:
+                _fail("sealed executable source does not match the lock")
 
-        os.fchmod(descriptor, int(entry["mode"], 8))
-        os.fsync(descriptor)
-        required_seals = (
-            fcntl.F_SEAL_WRITE
-            | fcntl.F_SEAL_GROW
-            | fcntl.F_SEAL_SHRINK
-            | fcntl.F_SEAL_SEAL
-        )
-        optional_exec_seal = getattr(fcntl, "F_SEAL_EXEC", 0)
-        requested_seals = required_seals | optional_exec_seal
-        fcntl.fcntl(descriptor, fcntl.F_ADD_SEALS, requested_seals)
-        applied_seals = fcntl.fcntl(descriptor, fcntl.F_GET_SEALS)
-        if applied_seals & requested_seals != requested_seals:
-            _fail("sealed executable is missing required seals")
+            os.fchmod(descriptor, int(entry["mode"], 8))
+            os.fsync(descriptor)
+            content_seals = (
+                fcntl.F_SEAL_WRITE
+                | fcntl.F_SEAL_GROW
+                | fcntl.F_SEAL_SHRINK
+            )
+            required_seals = content_seals | fcntl.F_SEAL_SEAL
+            fcntl.fcntl(descriptor, fcntl.F_ADD_SEALS, content_seals)
+            applied_seals = fcntl.fcntl(descriptor, fcntl.F_GET_SEALS)
+            optional_exec_seal = getattr(fcntl, "F_SEAL_EXEC", 0)
+            if optional_exec_seal:
+                try:
+                    fcntl.fcntl(descriptor, fcntl.F_ADD_SEALS, optional_exec_seal)
+                except OSError as exc:
+                    if exc.errno not in (
+                        errno.EINVAL,
+                        errno.ENOTSUP,
+                        errno.EOPNOTSUPP,
+                    ):
+                        raise
+                else:
+                    applied_seals |= optional_exec_seal
+            fcntl.fcntl(descriptor, fcntl.F_ADD_SEALS, fcntl.F_SEAL_SEAL)
+            applied_seals = fcntl.fcntl(descriptor, fcntl.F_GET_SEALS)
+            if applied_seals & required_seals != required_seals:
+                _fail("sealed executable is missing required seals")
 
-        with os.fdopen(descriptor, "rb", closefd=False) as stream:
-            sealed_size, sealed_digest = hash_open_file(stream, entry["size"])
-        sealed_stat = os.fstat(descriptor)
-        if (
-            sealed_size != entry["size"]
-            or sealed_digest != entry["sha256"]
-            or not stat.S_ISREG(sealed_stat.st_mode)
-            or stat.S_IMODE(sealed_stat.st_mode) != int(entry["mode"], 8)
-        ):
-            _fail("sealed executable does not match the locked bytes and mode")
+            with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                sealed_size, sealed_digest = hash_open_file(stream, entry["size"])
+            sealed_stat = os.fstat(descriptor)
+            if (
+                sealed_size != entry["size"]
+                or sealed_digest != entry["sha256"]
+                or not stat.S_ISREG(sealed_stat.st_mode)
+                or stat.S_IMODE(sealed_stat.st_mode) != int(entry["mode"], 8)
+            ):
+                _fail("sealed executable does not match the locked bytes and mode")
+        except OSError:
+            _fail("sealed executable preparation failed")
         yield descriptor
-    except OSError:
-        _fail("sealed executable preparation failed")
     finally:
         os.close(descriptor)
 

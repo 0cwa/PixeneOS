@@ -82,6 +82,23 @@ test_unsigned_exceptions_succeed() {
   verify_downloads magisk >/dev/null
 }
 
+test_locked_executables_rejected_without_retry() {
+  reset_fixture locked-executables
+  local tool status
+
+  for tool in afsr avbroot custota-tool; do
+    RETRY_CALLED="false"
+    if verify_downloads "${tool}" >/dev/null 2>&1; then
+      fail "locked executable ${tool} unexpectedly verified"
+    else
+      status=$?
+    fi
+    [[ "${status}" -ne 0 ]] || fail "locked executable ${tool} returned success"
+    [[ "${RETRY_CALLED}" == "false" ]] ||
+      fail "locked executable ${tool} invoked auto_retry_check"
+  done
+}
+
 test_locked_inputs_require_explicit_checked_in_files() {
   reset_fixture locked-inputs
   local lock_path="${WORKDIR}/fdroid.lock.json"
@@ -102,15 +119,19 @@ test_locked_input_rejects_worktree_index_mode_and_path_aliases() {
   reset_fixture locked-input-git-state
   local repository="${WORKDIR}/repository with spaces"
   local lock_path="${repository}/locks/fdroid lock.json"
+  local profile_path="${repository}/locks/fdroid profile.toml"
   local outside_path="${WORKDIR}/outside.lock"
 
-  git init -q -- "${repository}"
+  git -c core.hooksPath=/dev/null init -q -- "${repository}"
   git -C "${repository}" config user.email test@example.invalid
   git -C "${repository}" config user.name "Pixene test"
   git -C "${repository}" config core.filemode true
+  git -C "${repository}" config commit.gpgsign false
+  git -C "${repository}" config core.hooksPath /dev/null
   mkdir -p "$(dirname -- "${lock_path}")"
   printf '%s\n' '{"fixture":"clean"}' >"${lock_path}"
-  git -C "${repository}" add -- "locks/fdroid lock.json"
+  printf '%s\n' 'fixture = true' >"${profile_path}"
+  git -C "${repository}" add -- "locks/fdroid lock.json" "locks/fdroid profile.toml"
   git -C "${repository}" commit -q -m fixture
 
   (
@@ -162,12 +183,20 @@ test_locked_input_rejects_worktree_index_mode_and_path_aliases() {
   ); then
     fail "symlink lock unexpectedly succeeded"
   fi
+
+  local untracked_path="${repository}/locks/untracked.lock"
+  printf '%s\n' '{"fixture":"untracked"}' >"${untracked_path}"
+  if verify_fdroid_privileged_extension_inputs \
+    "${untracked_path}" "${profile_path}"; then
+    fail "untracked F-Droid lock unexpectedly succeeded"
+  fi
 }
 
 test_matching_signature_succeeds
 test_missing_signature_fails
 test_wrong_module_signature_fails
 test_unsigned_exceptions_succeed
+test_locked_executables_rejected_without_retry
 test_locked_inputs_require_explicit_checked_in_files
 test_locked_input_rejects_worktree_index_mode_and_path_aliases
 

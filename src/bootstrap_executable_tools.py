@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Mapping
 from contextlib import ExitStack
+import errno
 import json
 import os
 from pathlib import Path
@@ -14,7 +15,7 @@ import secrets
 import shutil
 import sys
 import tempfile
-from typing import Any, BinaryIO, Callable
+from typing import Any, BinaryIO, Callable, NoReturn
 
 from bootstrap_archive import (
     BootstrapError,
@@ -50,13 +51,10 @@ from validate_executable_tool_lock import (
 MAX_RECEIPT_BYTES = 4096
 REPORT_SCHEMA = 1
 LOWER_SHA256 = re.compile(r"[0-9a-f]{64}\Z")
-UNSAFE_ENVIRONMENT_NAMES = frozenset(
-    ("BASH_ENV", "ENV", "GLIBC_TUNABLES", "RUST_BACKTRACE", "RUST_LOG")
-)
-UNSAFE_ENVIRONMENT_PREFIXES = ("LD_", "DYLD_")
+REQUIRED_ENVIRONMENT_NAMES = frozenset(("PATH", "PASSPHRASE_AVB", "PASSPHRASE_OTA"))
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise BootstrapError(message)
 
 
@@ -65,17 +63,16 @@ def fd_exec_supported() -> bool:
 
 
 def sanitized_environment(source: Mapping[str, str]) -> dict[str, str]:
+    if not isinstance(source, Mapping):
+        fail("executable environment must be a mapping")
     result: dict[str, str] = {}
     for name, value in source.items():
         if not isinstance(name, str) or not isinstance(value, str):
             fail("executable environment must contain only text")
-        if name in UNSAFE_ENVIRONMENT_NAMES or name.startswith(
-            UNSAFE_ENVIRONMENT_PREFIXES
-        ):
-            continue
         if not name or "=" in name or "\x00" in name or "\x00" in value:
             fail("executable environment contains an unsafe entry")
-        result[name] = value
+        if name in REQUIRED_ENVIRONMENT_NAMES:
+            result[name] = value
     return result
 
 
@@ -213,8 +210,9 @@ class Bootstrapper:
             signature_path = self._object_path(
                 "signatures", receipt["signature_sha256"]
             )
-            self._verify_pair(tool, archive_path, signature_path, trust_path)
-            return archive_path, signature_path, receipt["signature_sha256"]
+            if archive_path.is_file() and signature_path.is_file():
+                self._verify_pair(tool, archive_path, signature_path, trust_path)
+                return archive_path, signature_path, receipt["signature_sha256"]
 
         archive_stage = stage / f"{tool['id']}.archive"
         signature_stage = stage / f"{tool['id']}.signature"
@@ -310,7 +308,9 @@ class Bootstrapper:
                 try:
                     os.rename(destination, installed)
                     fsync_directory(installed.parent)
-                except FileExistsError:
+                except OSError as exc:
+                    if exc.errno not in (errno.EEXIST, errno.ENOTEMPTY):
+                        raise
                     validate_install(installed, tool["layout"])
 
             report = self._report(tools, verified)
@@ -351,10 +351,15 @@ class Bootstrapper:
         tool = self.tools.get(tool_id)
         if tool is None:
             fail("unknown executable tool")
+        executable_entry = next(
+            (entry for entry in tool["layout"] if entry["path"] == tool_id), None
+        )
+        if executable_entry is None:
+            fail("locked executable member is absent from the install layout")
         self._check_legacy_directory(tool)
         installed = self._install_path(tool)
         validate_install(installed, tool["layout"])
-        executable = (installed / tool_id).absolute()
+        executable = (installed / executable_entry["path"]).absolute()
         if not executable.is_absolute() or tool["sha256"] not in executable.parts:
             fail("executable path is not absolute and digest-bound")
         return executable

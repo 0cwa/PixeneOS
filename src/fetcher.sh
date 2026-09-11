@@ -77,17 +77,26 @@ function get() {
 
 # Function to check and download the dependencies
 function download_ota() {
-  local ota="${WORKDIR}/${GRAPHENEOS[OTA_TARGET]}.zip"
+  local ota temp_ota
 
   # Set the URLs if not set
   if [[ -z "${GRAPHENEOS[OTA_URL]}" || -z "${GRAPHENEOS[OTA_TARGET]}" ]]; then
-    get_latest_version
+    get_latest_version || return 1
   fi
+  ota="${WORKDIR}/${GRAPHENEOS[OTA_TARGET]}.zip"
+  temp_ota="${ota}.part.${BASHPID}"
 
   # Download if not downloaded already
   if [ ! -f "${ota}" ]; then
     echo -e "Downloading OTA from: ${GRAPHENEOS[OTA_URL]}...\nPlease be patient while the download happens."
-    curl -sLf "${GRAPHENEOS[OTA_URL]}" --output "${ota}"
+    if ! curl -sLf "${GRAPHENEOS[OTA_URL]}" --output "${temp_ota}"; then
+      rm -f -- "${temp_ota}" || :
+      return 1
+    fi
+    if ! mv -- "${temp_ota}" "${ota}"; then
+      rm -f -- "${temp_ota}" || :
+      return 1
+    fi
     echo -e "OTA downloaded to: \`${ota}\`\n"
   else
     echo -e "OTA is already downloaded in: \`${ota}\`\n"

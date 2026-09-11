@@ -62,6 +62,9 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    concurrency:
+      group: gh-pages
+      cancel-in-progress: false
     permissions:
       contents: write
 
@@ -101,7 +104,7 @@ jobs:
           enforce_output_policy "${OUTPUT_SCOPE}"
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
           toolchain: stable 2 weeks ago
 
@@ -111,20 +114,27 @@ jobs:
       - name: Install Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.12-dev"
+          python-version: "3.12.11"
 
       - name: Setup signing environment
         shell: bash
+        env:
+          AVB_KEY: ${{ secrets.AVB_KEY }}
+          CERT_OTA: ${{ secrets.CERT_OTA }}
+          OTA_KEY: ${{ secrets.OTA_KEY }}
         run: |
-          echo "KEYS_AVB_BASE64<<EOF" >> "${GITHUB_ENV}"
-          echo "${{ secrets.AVB_KEY }}" >> "${GITHUB_ENV}"
-          echo "EOF" >> "${GITHUB_ENV}"
-          echo "KEYS_CERT_OTA_BASE64<<EOF" >> "${GITHUB_ENV}"
-          echo "${{ secrets.CERT_OTA }}" >> "${GITHUB_ENV}"
-          echo "EOF" >> "${GITHUB_ENV}"
-          echo "KEYS_OTA_BASE64<<EOF" >> "${GITHUB_ENV}"
-          echo "${{ secrets.OTA_KEY }}" >> "${GITHUB_ENV}"
-          echo "EOF" >> "${GITHUB_ENV}"
+          delimiter="$(openssl rand -hex 16)"
+          {
+            echo "KEYS_AVB_BASE64<<${delimiter}"
+            echo "${AVB_KEY}"
+            echo "${delimiter}"
+            echo "KEYS_CERT_OTA_BASE64<<${delimiter}"
+            echo "${CERT_OTA}"
+            echo "${delimiter}"
+            echo "KEYS_OTA_BASE64<<${delimiter}"
+            echo "${OTA_KEY}"
+            echo "${delimiter}"
+          } >> "${GITHUB_ENV}"
 
       - name: Patch OTA
         shell: bash
@@ -243,9 +253,11 @@ jobs:
           git add -- "${target_file}" "${variant_file}"
 
           if [[ "${RELEASE_TYPE}" == 'force-publish' ]]; then
+            marker_file="force-publish/${DEVICE_NAME}.marker"
+            mkdir -p -- "$(dirname -- "${marker_file}")"
             printf 'force-publish run %s (attempt %s)\n' \
-              "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" > .tmp
-            git add -- .tmp
+              "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" > "${marker_file}"
+            git add -- "${marker_file}"
           fi
           if ! git diff-index --quiet HEAD; then
             git commit -m "release(${current_commit}): publish ${ROM_FAMILY} ${GRAPHENEOS_VERSION} ${MODULE_SELECTION_FINGERPRINT}"

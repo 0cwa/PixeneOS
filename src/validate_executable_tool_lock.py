@@ -14,7 +14,7 @@ import re
 import stat
 import struct
 import sys
-from typing import Any
+from typing import Any, NoReturn
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -72,9 +72,9 @@ TOOL_POLICY = {
         "layout": {"LICENSE": "0644", "README.md": "0644", "avbroot": "0755"},
     },
     "custota-tool": {
-        "version": "6.2",
+        "version": "6.4",
         "repository": "Custota",
-        "artifact_name": "custota-tool-6.2-x86_64-unknown-linux-gnu.zip",
+        "artifact_name": "custota-tool-6.4-x86_64-unknown-linux-gnu.zip",
         "layout": {"custota-tool": "0755"},
     },
 }
@@ -84,7 +84,7 @@ class ValidationError(Exception):
     """Raised when lock or trust data fails closed."""
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise ValidationError(message)
 
 

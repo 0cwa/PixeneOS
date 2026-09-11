@@ -16,7 +16,7 @@ function fetch_grapheneos_ota_metadata() {
     return 1
   fi
 
-  VERSION[GRAPHENEOS]="${GRAPHENEOS_VERSION:-${latest_version}}"
+  VERSION[GRAPHENEOS]="${latest_version}"
   ROM_OTA_SHA256=""
   GRAPHENEOS[OTA_TARGET]="${DEVICE_NAME}-${GRAPHENEOS[UPDATE_TYPE]}-${latest_version}"
   GRAPHENEOS[OTA_URL]="${ROM_PROFILE[OTA_BASE_URL]}/${GRAPHENEOS[OTA_TARGET]}.zip"
@@ -40,7 +40,10 @@ try:
     builds = json.load(sys.stdin)
     channel = sys.argv[1]
     device = sys.argv[2]
-    build = next(item for item in builds if item["type"] == channel)
+    build = max(
+        (item for item in builds if item["type"] == channel),
+        key=lambda item: item.get("datetime", item.get("date", "")),
+    )
     item = next(
         item for item in build["files"]
         if item["filename"].endswith(".zip") and item["type"] == channel
@@ -81,7 +84,7 @@ print(sha256)
     return 1
   fi
 
-  VERSION[GRAPHENEOS]="${GRAPHENEOS_VERSION:-${latest_version}}"
+  VERSION[GRAPHENEOS]="${latest_version}"
   GRAPHENEOS[OTA_TARGET]="${filename%.zip}"
   GRAPHENEOS[OTA_URL]="${ota_url}"
 }

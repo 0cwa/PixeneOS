@@ -26,16 +26,17 @@ entry to name that fingerprint, identity, and namespace.
 ## Recorded release artifacts
 
 The following archive sizes and SHA-256 digests were independently recomputed
-from downloads made on 2026-07-20. They matched the sizes and SHA-256 asset
-digests exposed by GitHub's release API. Each detached signature was exactly 294
-bytes and was accepted by `ssh-keygen -Y verify` using identity `chenxiaolong`
-and namespace `file` only after the archive digest and size had been checked.
+from downloads made on 2026-07-20, except for Custota v6.4, which was checked on
+2026-08-08. They matched the sizes and SHA-256 asset digests exposed by GitHub's
+release API. Each detached signature was exactly 294 bytes and was accepted by
+`ssh-keygen -Y verify` using identity `chenxiaolong` and namespace `file` only
+after the archive digest and size had been checked.
 
 | Tool | Release archive | Bytes | SHA-256 |
 | --- | --- | ---: | --- |
 | afsr 1.0.4 | `afsr-1.0.4-x86_64-unknown-linux-gnu.zip` | 1,548,868 | `8fdbc9aa6c31b4e6530388ffc5adc42652ec6bbd753aef0815d27d8c3a4b9687` |
 | avbroot 3.31.0 | `avbroot-3.31.0-x86_64-unknown-linux-gnu.zip` | 3,979,155 | `59e7992c2a6379d8ee351e423a851ef360a97cd14a37e6b2e57608eb477c3210` |
-| custota-tool 6.2 | `custota-tool-6.2-x86_64-unknown-linux-gnu.zip` | 2,153,916 | `e682c558f8111287b9668f647bc9fded3fa095714957fd8090bc386bae02917d` |
+| custota-tool 6.4 | `custota-tool-6.4-x86_64-unknown-linux-gnu.zip` | 2,357,231 | `7d45c0200839f4527b9cdae45ee53bc6579944a85eafb5016fc10e252e120911` |
 
 Detached-signature SHA-256 digests observed during that verification were:
 
@@ -43,7 +44,7 @@ Detached-signature SHA-256 digests observed during that verification were:
 | --- | --- |
 | `afsr-1.0.4-x86_64-unknown-linux-gnu.zip.sig` | `354bd28d0c1cf20a9ca76dfb958451ad17fa1f34f125fec1ddae58fffc315616` |
 | `avbroot-3.31.0-x86_64-unknown-linux-gnu.zip.sig` | `2fb0067d577310b138f542161cc04e0901249c5b661c7f15784822141b8a3437` |
-| `custota-tool-6.2-x86_64-unknown-linux-gnu.zip.sig` | `ca28ad6130108240fa67418059426b94e001d905e1a51f24eff4bb692f4570ee` |
+| `custota-tool-6.4-x86_64-unknown-linux-gnu.zip.sig` | `ecf07da6094f8d9c407a48641badcab88b3f813b1944092469c315a3b34db632` |
 
 GitHub does not publish separate publisher-signed checksum files for these
 releases. GitHub's asset digest is discovery metadata, not a replacement for the
@@ -54,7 +55,7 @@ Official releases:
 
 - [afsr v1.0.4][afsr-release]
 - [avbroot v3.31.0][avbroot-release]
-- [Custota v6.2][custota-release]
+- [Custota v6.4][custota-release]
 
 ## Verification and archive inspection
 
@@ -71,7 +72,7 @@ and non-file/non-directory Unix entry types. The reviewed archives contained:
 | avbroot | `LICENSE` | file | `0644` | 35,149 | `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986` |
 | avbroot | `README.md` | file | `0644` | 31,744 | `29c520ac9a61f71cd2db30e091ef638a523dc2e87a16f5340763396a20c3c97e` |
 | avbroot | `avbroot` | file | `0755` | 10,139,408 | `7fdfa4a6c8a3145c846faeea1aa49aa407c296710d72744a88e8a8c441e05ea0` |
-| custota-tool | `custota-tool` | file | `0755` | 5,056,240 | `3245641f1f7cfef3b6fd0257d6bdda83fa9c65c533e289e4c8f12e1e8c50b41a` |
+| custota-tool | `custota-tool` | file | `0755` | 5,552,592 | `eb3fc5a31a955d74222ec00c7349e9148719a3ccd6b25ede12e24e34030767ee` |
 
 Only after those checks passed were the archives extracted into separate private
 temporary directories. The extracted member types, modes, sizes, and SHA-256
@@ -129,7 +130,9 @@ Downloads use bounded streaming into exclusive, no-follow files in a private
 mode-`0700` transaction directory. Verified bytes are fsynced and atomically
 published under `bootstrap-cache/objects`; a canonical receipt binds the
 archive digest to its verified signature digest. Cache hits repeat size,
-digest, signature, and archive inspection. A missing, corrupt, linked, or
+digest, signature, and archive inspection when both referenced objects exist.
+If either cached object is missing, the receipt is treated as a cache miss and
+the normal download and validation flow is used. A corrupt, linked, or
 noncanonical cache entry fails closed.
 
 Members are extracted without `unzip` into private transaction directories.
@@ -176,4 +179,4 @@ supply-chain gates are closed.
 [signing-guide]: https://github.com/chenxiaolong/chenxiaolong/blob/master/VERIFY_SSH_SIGNATURES.md
 [afsr-release]: https://github.com/chenxiaolong/afsr/releases/tag/v1.0.4
 [avbroot-release]: https://github.com/chenxiaolong/avbroot/releases/tag/v3.31.0
-[custota-release]: https://github.com/chenxiaolong/Custota/releases/tag/v6.2
+[custota-release]: https://github.com/chenxiaolong/Custota/releases/tag/v6.4

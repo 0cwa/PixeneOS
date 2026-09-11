@@ -50,6 +50,8 @@ jobs:
     uses: ./.github/workflows/build-rom.yml
     with:
       rom-family: grapheneos
+      # Scheduled builds intentionally follow the tracked env.toml device (bramble);
+      # manual dispatch retains shiba as its user-facing default.
       device-id: ${{ github.event_name == 'schedule' && 'bramble' || inputs.device-id }}
       root: ${{ github.event_name == 'workflow_dispatch' && inputs.root || false }}
       magisk-preinit-device: ${{ inputs.magisk-preinit-device || 'sda10' }}
