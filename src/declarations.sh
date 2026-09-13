@@ -84,6 +84,8 @@ ADDITIONALS[CUSTOTA]="${ADDITIONALS_CUSTOTA:-${ADDITIONALS[CUSTOTA]:-true}}"
 ADDITIONALS[MSD]="${ADDITIONALS_MSD:-${ADDITIONALS[MSD]:-true}}"
 # Toggle OEM unlock button on boot
 ADDITIONALS[OEMUNLOCKONBOOT]="${ADDITIONALS_OEMUNLOCKONBOOT:-${ADDITIONALS[OEMUNLOCKONBOOT]:-true}}"
+# Optional local boot-animation payload at custom/boot-animation/bootanimation.zip.
+ADDITIONALS[BOOT_ANIMATION]="${ADDITIONALS_BOOT_ANIMATION:-${ADDITIONALS[BOOT_ANIMATION]:-false}}"
 # F-Droid client and Privileged Extension through the locked native adapter.
 # There is intentionally no production lock/profile default yet.
 ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]="${ADDITIONALS_FDROID_PRIVILEGED_EXTENSION:-${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]:-false}}"

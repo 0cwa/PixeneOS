@@ -6,6 +6,10 @@
 # metadata parsing lives in ota_providers.sh.
 declare -gA ROM_PROFILE
 
+_rom_profiles_source_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+source "${_rom_profiles_source_dir}/ci/selection_variant.sh"
+unset _rom_profiles_source_dir
+
 function _require_profile_boolean() {
   local name="${1}"
   local value="${2}"
@@ -130,10 +134,23 @@ function _locked_input_digest() {
   printf '%s\n' "${digest}"
 }
 
+function _boot_animation_payload_path() {
+  local repository_root
+  repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)" || return 1
+  printf '%s\n' "${repository_root}/custom/boot-animation/bootanimation.zip"
+}
+
+function _boot_animation_payload_digest() {
+  local payload_path
+  payload_path="$(_boot_animation_payload_path)" || return 1
+  python3 src/boot_animation.py digest "${payload_path}"
+}
+
 function module_selection_fingerprint() {
   local lock_digest="disabled"
   local profile_digest="disabled"
   local magisk_preinit="disabled"
+  local boot_animation_digest="disabled"
   local entry
   local -a module_entries=(
     "alterinstaller:ALTERINSTALLER"
@@ -149,11 +166,20 @@ function module_selection_fingerprint() {
 
   _require_profile_boolean ADDITIONALS_ROOT "${ADDITIONALS[ROOT]}" || return 1
   _require_profile_boolean ADDITIONALS_DEBUG "${ADDITIONALS[DEBUG]}" || return 1
+  _require_profile_boolean ADDITIONALS_BOOT_ANIMATION \
+    "${ADDITIONALS[BOOT_ANIMATION]}" || return 1
   for entry in "${module_entries[@]}"; do
     _require_profile_boolean \
       "ADDITIONALS_${entry#*:}" \
       "${ADDITIONALS[${entry#*:}]}" || return 1
   done
+
+  if [[ "${ADDITIONALS[BOOT_ANIMATION]}" == 'true' ]]; then
+    boot_animation_digest="$(_boot_animation_payload_digest)" || {
+      echo "Error: enabled boot animation payload failed validation." >&2
+      return 1
+    }
+  fi
 
   if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
     magisk_preinit="${MAGISK[PREINIT]}"
@@ -174,25 +200,28 @@ function module_selection_fingerprint() {
     }
   fi
 
-  MODULE_SELECTION_FINGERPRINT="$({
-    printf '%s\n' \
-      'pixene-module-selection-v1' \
-      "rom_family=${ROM_FAMILY}" \
-      "update_channel=${GRAPHENEOS[UPDATE_CHANNEL]}" \
-      "update_type=${GRAPHENEOS[UPDATE_TYPE]}" \
-      "output_scope=${OUTPUT_SCOPE}" \
-      "root=${ADDITIONALS[ROOT]}" \
-      "magisk_preinit=${magisk_preinit}" \
-      "debug=${ADDITIONALS[DEBUG]}" \
-      "compatible_sepolicy=${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}" \
-      "clear_vbmeta_flags=${ROM_PROFILE[CLEAR_VBMETA_FLAGS]}" \
-      "helper_commit=${VERSION[AVBROOT_SETUP]}" \
-      "lock_sha256=${lock_digest}" \
-      "profile_sha256=${profile_digest}"
-    for entry in "${module_entries[@]}"; do
-      printf 'module.%s=%s\n' "${entry%%:*}" "${ADDITIONALS[${entry#*:}]}"
-    done
-  } | sha256sum | awk '{print $1}')"
+  SELECTION_ROM_FAMILY="${ROM_FAMILY}"
+  SELECTION_UPDATE_CHANNEL="${GRAPHENEOS[UPDATE_CHANNEL]}"
+  SELECTION_UPDATE_TYPE="${GRAPHENEOS[UPDATE_TYPE]}"
+  SELECTION_OUTPUT_SCOPE="${OUTPUT_SCOPE}"
+  SELECTION_ROOT="${ADDITIONALS[ROOT]}"
+  SELECTION_MAGISK_PREINIT="${magisk_preinit}"
+  SELECTION_DEBUG="${ADDITIONALS[DEBUG]}"
+  SELECTION_COMPATIBLE_SEPOLICY="${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}"
+  SELECTION_CLEAR_VBMETA_FLAGS="${ROM_PROFILE[CLEAR_VBMETA_FLAGS]}"
+  SELECTION_HELPER_COMMIT="${VERSION[AVBROOT_SETUP]}"
+  SELECTION_LOCK_SHA256="${lock_digest}"
+  SELECTION_PROFILE_SHA256="${profile_digest}"
+  SELECTION_MODULE_ALTERINSTALLER="${ADDITIONALS[ALTERINSTALLER]}"
+  SELECTION_MODULE_BCR="${ADDITIONALS[BCR]}"
+  SELECTION_MODULE_CUSTOTA="${ADDITIONALS[CUSTOTA]}"
+  SELECTION_MODULE_FDROID_PRIVILEGED_EXTENSION="${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}"
+  SELECTION_MODULE_MSD="${ADDITIONALS[MSD]}"
+  SELECTION_MODULE_OEMUNLOCKONBOOT="${ADDITIONALS[OEMUNLOCKONBOOT]}"
+  SELECTION_BOOT_ANIMATION="${ADDITIONALS[BOOT_ANIMATION]}"
+  SELECTION_BOOT_ANIMATION_SHA256="${boot_animation_digest}"
+
+  MODULE_SELECTION_FINGERPRINT="$(selection_variant_fingerprint)"
 
   if [[ ! "${MODULE_SELECTION_FINGERPRINT}" =~ ^[0-9a-f]{64}$ ]]; then
     echo "Error: failed to compute the module-selection fingerprint." >&2

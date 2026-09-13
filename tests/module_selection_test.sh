@@ -164,6 +164,7 @@ reset_fixture() {
   ADDITIONALS[BCR]="true"
   ADDITIONALS[OEMUNLOCKONBOOT]="true"
   ADDITIONALS[ALTERINSTALLER]="true"
+  ADDITIONALS[BOOT_ANIMATION]="false"
   ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]="false"
   ADDITIONALS[DEBUG]="false"
   ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]="false"
@@ -306,6 +307,32 @@ test_special_cases_remain_available() {
   assert_contains "--module-debug-sig" "debug"
   assert_contains "${WORKDIR}/modules/dummy.zip.sig" "debug"
   assert_contains "--patch-arg=--rootless" "debug"
+}
+
+test_boot_animation_module_is_optional_and_ordered() {
+  local value
+  local -a ordered=()
+  reset_fixture boot-animation-enabled
+  ADDITIONALS[BOOT_ANIMATION]="true"
+  prepare_boot_animation_module() { :; }
+  set_default_expected_args
+  EXPECTED_ARGS=(
+    "${EXPECTED_ARGS[@]:0:29}"
+    "--module-boot-animation" "${WORKDIR}/modules/boot-animation.zip"
+    "${EXPECTED_ARGS[@]:29}"
+  )
+  for value in "${EXPECTED_ARGS[@]}"; do
+    if [[ "${value}" == "--patch-arg=--rootless" ]]; then
+      ordered+=(
+        "--module-boot-animation-sig"
+        "${WORKDIR}/signatures/boot-animation.zip.sig"
+      )
+    fi
+    ordered+=("${value}")
+  done
+  EXPECTED_ARGS=("${ordered[@]}")
+  run_patch
+  assert_array_equals EXPECTED_ARGS CAPTURED_ARGS "boot-animation module ordering"
 }
 
 enable_fdroid_fixture() {
@@ -517,6 +544,7 @@ test_default_arguments
 test_each_module_can_be_disabled
 test_all_modules_can_be_disabled
 test_special_cases_remain_available
+test_boot_animation_module_is_optional_and_ordered
 test_fdroid_locked_preparation_and_arguments
 test_fdroid_missing_or_untracked_inputs_fail_closed
 test_fdroid_preparation_precedes_ota_extraction

@@ -176,6 +176,7 @@ function append_enabled_module_arguments() {
     "bcr:BCR"
     "oemunlockonboot:OEMUNLOCKONBOOT"
     "alterinstaller:ALTERINSTALLER"
+    "boot-animation:BOOT_ANIMATION"
   )
 
   for entry in "${module_entries[@]}"; do
@@ -194,6 +195,79 @@ function append_enabled_module_arguments() {
   for module in "${enabled_modules[@]}"; do
     args_ref+=("--module-${module}-sig" "${WORKDIR}/signatures/${module}.zip.sig")
   done
+}
+
+# Validate and register the optional local boot-animation module before any
+# patch command runs. The helper's Module/ModuleRequirements API is the same
+# API used by src/debugmod.py at the pinned helper revision.
+function prepare_boot_animation_module() {
+  local helper_root="${1}"
+  local repository_root payload_path init_file registry_file module_source
+  repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)" || return 1
+  payload_path="${repository_root}/custom/boot-animation/bootanimation.zip"
+
+  if [[ "${ADDITIONALS[BOOT_ANIMATION]}" != 'true' ]]; then
+    return 0
+  fi
+
+  if ! python3 src/boot_animation.py validate "${payload_path}" >/dev/null; then
+    echo "Error: boot animation validation failed; refusing to patch." >&2
+    return 1
+  fi
+
+  init_file="${helper_root}/lib/modules/__init__.py"
+  registry_file="${helper_root}/lib/modules/registry.py"
+  module_source="${helper_root}/lib/modules/boot_animation.py"
+  if [[ ! -f "${init_file}" || -L "${init_file}" ]]; then
+    echo "Error: pinned patch helper lacks its module registry." >&2
+    return 1
+  fi
+  if [[ ! -d "${helper_root}/lib/modules" || -L "${helper_root}/lib/modules" ]]; then
+    echo "Error: pinned patch helper has no safe module directory." >&2
+    return 1
+  fi
+  if [[ ! -f "${registry_file}" || -L "${registry_file}" ]]; then
+    echo "Error: pinned patch helper lacks its legacy module registry." >&2
+    return 1
+  fi
+  if [[ -L "${module_source}" ]]; then
+    echo "Error: pinned patch helper has an unsafe boot-animation module path." >&2
+    return 1
+  fi
+
+  cp -- src/boot_animation.py "${module_source}" || return 1
+  if ! grep -Fq 'def all_modules' "${init_file}" ||
+    ! grep -Fq 'legacy_cli_module_types' "${init_file}" ||
+    ! grep -Fq 'def legacy_cli_module_types' "${registry_file}" ||
+    ! grep -Fq 'result: list[type[LegacyCliModule]] = []' "${registry_file}" ||
+    ! grep -Fq '    return tuple(result)' "${registry_file}"; then
+    echo "Error: unsupported pinned helper module registry API." >&2
+    return 1
+  fi
+
+  if ! grep -Fq 'from lib.modules.boot_animation import BootAnimationMod' "${registry_file}"; then
+    awk '/^    result: list\[type\[LegacyCliModule\]\] = \[\]$/ {
+      print
+      print "    from lib.modules.boot_animation import BootAnimationMod"
+      next
+    }
+    {print}' "${registry_file}" >"${registry_file}.tmp" || return 1
+    mv -- "${registry_file}.tmp" "${registry_file}" || return 1
+  fi
+  if ! grep -Fq '    result.append(BootAnimationMod)' "${registry_file}"; then
+    awk '/^    return tuple\(result\)$/ {
+      print "    result.append(BootAnimationMod)"
+      print
+      next
+    }
+    {print}' "${registry_file}" >"${registry_file}.tmp" || return 1
+    mv -- "${registry_file}.tmp" "${registry_file}" || return 1
+  fi
+
+  mkdir -p -- "${WORKDIR}/modules" "${WORKDIR}/signatures" || return 1
+  : >"${WORKDIR}/modules/boot-animation.zip"
+  : >"${WORKDIR}/signatures/boot-animation.zip.sig"
+  export PIXENEOS_BOOT_ANIMATION_PATH="${payload_path}"
 }
 
 # Resolve and acquire the locked F-Droid inputs before exposing them to the
@@ -408,6 +482,10 @@ function patch_ota() {
     fi
 
     # Modules and their signatures
+    if [[ "${ADDITIONALS[BOOT_ANIMATION]}" == 'true' ]] &&
+      ! prepare_boot_animation_module "${my_avbroot_setup}"; then
+      return 1
+    fi
     append_enabled_module_arguments args
     if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' ]]; then
       args+=("${locked_module_args[@]}")
@@ -784,7 +862,63 @@ function check_toml_env() {
       echo -e "Found variables in \`${toml_file}\` and will take precedence over other values.\n"
       for key in "${!config_vars[@]}"; do
         echo -e "${key}: ${config_vars[$key]}"
-        eval "${key}=${config_vars[$key]}"
+
+        if [[ ! "${key}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ &&
+          ! "${key}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*\[[a-zA-Z_][a-zA-Z0-9_]*\]$ ]]; then
+          echo "Error: malformed configuration key: ${key}" >&2
+          return 1
+        fi
+
+        case "${key}" in
+          DEVICE_NAME|INTERACTIVE_MODE|ROM_FAMILY|OUTPUT_SCOPE|\
+          PIXENEOS_RELEASE_OWNER|PIXENEOS_RELEASE_REPOSITORY|\
+          PIXENEOS_RELEASE_BASE_URL|PIXENEOS_AVBROOT_SETUP_SOURCE)
+            printf -v "${key}" '%s' "${config_vars[$key]}"
+            ;;
+          FORCE_UPDATE)
+            printf -v FORCE_UPDATE '%s' "${config_vars[$key]}"
+            ;;
+          'GRAPHENEOS[UPDATE_CHANNEL]')
+            GRAPHENEOS[UPDATE_CHANNEL]="${config_vars[$key]}"
+            ;;
+          'ADDITIONALS[AFSR]')
+            ADDITIONALS[AFSR]="${config_vars[$key]}"
+            ;;
+          'ADDITIONALS[ALTERINSTALLER]')
+            ADDITIONALS[ALTERINSTALLER]="${config_vars[$key]}"
+            ;;
+          'ADDITIONALS[BCR]')
+            ADDITIONALS[BCR]="${config_vars[$key]}"
+            ;;
+          'ADDITIONALS[CUSTOTA]')
+            ADDITIONALS[CUSTOTA]="${config_vars[$key]}"
+            ;;
+          'ADDITIONALS[MSD]')
+            ADDITIONALS[MSD]="${config_vars[$key]}"
+            ;;
+          'ADDITIONALS[OEMUNLOCKONBOOT]')
+            ADDITIONALS[OEMUNLOCKONBOOT]="${config_vars[$key]}"
+            ;;
+          'ADDITIONALS[BOOT_ANIMATION]')
+            ADDITIONALS[BOOT_ANIMATION]="${config_vars[$key]}"
+            ;;
+          'ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]')
+            ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]="${config_vars[$key]}"
+            ;;
+          'MAGISK[REPOSITORY]')
+            MAGISK[REPOSITORY]="${config_vars[$key]}"
+            ;;
+          ROOT)
+            ADDITIONALS[ROOT]="${config_vars[$key]}"
+            ;;
+          MAGISK_PREINIT)
+            MAGISK[PREINIT]="${config_vars[$key]}"
+            ;;
+          *)
+            echo "Error: unsupported configuration key: ${key}" >&2
+            return 1
+            ;;
+        esac
       done
     else
       echo -e "Failed to find the required variables in \`${toml_file}\`.\n"

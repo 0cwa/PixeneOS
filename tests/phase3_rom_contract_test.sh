@@ -33,6 +33,10 @@ load_contract() {
     fail "resolve_rom_profile is not defined"
   declare -F module_selection_fingerprint >/dev/null ||
     fail "module_selection_fingerprint is not defined"
+  declare -F selection_variant_manifest >/dev/null ||
+    fail "selection_variant_manifest is not defined"
+  declare -F selection_variant_fingerprint >/dev/null ||
+    fail "selection_variant_fingerprint is not defined"
   declare -F enforce_output_policy >/dev/null ||
     fail "enforce_output_policy is not defined"
   declare -p ROM_PROFILE >/dev/null 2>&1 ||
@@ -100,6 +104,7 @@ set_selection_fixture() {
   ADDITIONALS[BCR]="true"
   ADDITIONALS[OEMUNLOCKONBOOT]="true"
   ADDITIONALS[ALTERINSTALLER]="true"
+  ADDITIONALS[BOOT_ANIMATION]="false"
   ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]="false"
   resolve_rom_profile
 }
@@ -119,12 +124,26 @@ fingerprint() {
 
 test_selection_fingerprint() (
   local baseline repeated root_changed rom_changed module_changed
+  local boot_changed second_boot_changed fingerprint_input
 
   load_contract
   set_selection_fixture
   baseline="$(fingerprint)"
   repeated="$(fingerprint)"
   assert_equals "${baseline}" "${repeated}" "deterministic fingerprint"
+  module_selection_fingerprint >/dev/null
+  assert_equals "${baseline}" "$(selection_variant_fingerprint)" \
+    "build fingerprint uses the shared selection helper"
+
+  fingerprint_input="${TEST_ROOT}/fingerprint-input-${BASHPID}"
+  sha256sum() {
+    tee "${fingerprint_input}" | command sha256sum
+  }
+  module_selection_fingerprint >/dev/null
+  unset -f sha256sum
+  if grep -Eq '^boot_animation(_sha256)?=' "${fingerprint_input}"; then
+    fail "default-off fingerprint must omit boot-animation fields"
+  fi
 
   MAGISK[PREINIT]="sda10"
   ADDITIONALS[ROOT]="true"
@@ -151,6 +170,33 @@ test_selection_fingerprint() (
   module_changed="$(fingerprint)"
   [[ "${module_changed}" != "${baseline}" ]] ||
     fail "module selection did not change the fingerprint"
+
+  ADDITIONALS[BOOT_ANIMATION]="true"
+  mkdir -p "${TEST_ROOT}/custom/boot-animation"
+  python3 - "${TEST_ROOT}/custom/boot-animation/bootanimation.zip" <<'PY'
+import sys
+import zipfile
+
+with zipfile.ZipFile(sys.argv[1], "w") as archive:
+    archive.writestr("desc.txt", "1 1 1\np 1 0 part0\n")
+    archive.writestr("part0/frame.png", b"frame")
+PY
+  _boot_animation_payload_path() { printf '%s\n' "${TEST_ROOT}/custom/boot-animation/bootanimation.zip"; }
+  boot_changed="$(fingerprint)"
+  [[ "${boot_changed}" != "${module_changed}" ]] ||
+    fail "boot animation selection did not change the fingerprint"
+
+  python3 - "${TEST_ROOT}/custom/boot-animation/bootanimation.zip" <<'PY'
+import sys
+import zipfile
+
+with zipfile.ZipFile(sys.argv[1], "w") as archive:
+    archive.writestr("desc.txt", "1 1 1\np 1 0 part0\n")
+    archive.writestr("part0/frame.png", b"different-frame")
+PY
+  second_boot_changed="$(fingerprint)"
+  [[ "${second_boot_changed}" != "${boot_changed}" ]] ||
+    fail "enabled boot-animation payload change did not change the fingerprint"
 )
 
 test_output_filename_contains_fingerprint() (

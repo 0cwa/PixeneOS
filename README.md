@@ -268,6 +268,15 @@ PixeneOS can be run on your local machine. A Linux based machine is preferred.
 
 `INTERACTIVE_MODE`, by default is set to `true` that calls `check_toml_env` function to check the existence of `env.toml`. If the file exist, it will read the `env.toml` file and set the environment variables accordingly. If the `env.toml` is non-existent, ignored. If it exist, and the format is wrong, the script exits with an error.
 
+### Optional custom boot animation
+
+To use a local Android boot animation, place the ZIP at exactly
+`custom/boot-animation/bootanimation.zip`. Builds remain unchanged by default;
+enable the feature explicitly with `ADDITIONALS_BOOT_ANIMATION=true`, or add
+`'ADDITIONALS[BOOT_ANIMATION]' = true` to `env.toml`. The archive is validated
+before patching, and its exact SHA-256 is included in the module-selection
+fingerprint. The payload is not read or required while the option is disabled.
+
 ### Release URL and source overrides
 
 By default, generated Custota metadata points patched OTA downloads at GitHub Releases for the current repository. These environment variables can override that behavior:
