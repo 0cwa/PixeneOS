@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Check shell syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in src/*.sh src/ci/*.sh tests/*.sh; do
+            bash -n "${file}"
+          done
+
+      - name: ShellCheck when available
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v shellcheck >/dev/null 2>&1; then
+            shellcheck -x -S warning src/main.sh src/setup_hooks.sh
+          else
+            echo "::notice::ShellCheck is not installed on this runner; skipping ShellCheck."
+          fi
+
+      - name: Run deterministic tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tests/declarations_config_test.sh
+          bash tests/release_url_config_test.sh
+          bash tests/release_existing_build_test.sh
+          bash tests/phase3_provider_acquisition_test.sh
+          bash tests/executable_tool_lock_test.sh
+          bash tests/executable_tool_bootstrap_test.sh
+          bash tests/executable_tool_routing_test.sh
+          bash tests/phase3_workflows_test.sh
+          bash tests/phase3_rom_contract_test.sh
+          bash tests/module_selection_test.sh
+          bash tests/boot_animation_config_test.sh
+          bash tests/boot_animation_registration_test.sh
+          python3 tests/boot_animation_test.py
+          bash tests/secrets_scan_test.sh
+          bash tests/verifier_test.sh

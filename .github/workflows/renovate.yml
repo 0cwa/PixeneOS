@@ -20,11 +20,17 @@ on:
 jobs:
   renovate:
     runs-on: ubuntu-latest
+    # Renovate receives its narrowly scoped GitHub credential through the
+    # secret below; the workflow token itself must remain read-only.
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Self-hosted Renovate
+        # Upstream currently names v46.2.6, but this fork keeps its reviewed
+        # immutable pin until the corresponding action artifact is verified.
         uses: renovatebot/github-action@316d7cd859606d6039a2182b7d69199e9b036835
         with:
           configurationFile: .github/renovate.json5

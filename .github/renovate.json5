@@ -1,9 +1,26 @@
 {
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
   prHourlyLimit: 0,
+  // Renovate can propose updates, but it cannot truthfully observe which
+  // dependency-bot PRs were merged in pixincreate/PixeneOS. Reviewers must
+  // compare each proposal with upstream's merged Renovate/Dependabot lead
+  // before applying it to this fork.
+  dependencyDashboard: true,
   gitAuthor: "Renovate Bot <renovatebot@non-existent-email.com>",
   assignees: ["pixincreate"],
   labels: ["dependencies"],
+  packageRules: [
+    {
+      description: "Require explicit upstream-lead and lock review for fork dependencies",
+      matchManagers: ["custom.regex"],
+      matchFileNames: ["/^src\\/declarations\\.sh$/"],
+      automerge: false,
+      dependencyDashboardApproval: true,
+      prBodyNotes: [
+        "Upstream-lead policy: compare this proposal with the corresponding merged dependency-bot change in pixincreate/PixeneOS before merging. Follow upstream only after this fork's executable lock, signature, and compatibility validation passes.",
+      ],
+    },
+  ],
   customManagers: [
     {
       customType: "regex",
