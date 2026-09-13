@@ -16,6 +16,30 @@ on:
         required: false
         type: string
         default: ""
+      alterinstaller:
+        required: false
+        type: boolean
+        default: true
+      bcr:
+        required: false
+        type: boolean
+        default: true
+      custota:
+        required: false
+        type: boolean
+        default: true
+      msd:
+        required: false
+        type: boolean
+        default: true
+      oemunlockonboot:
+        required: false
+        type: boolean
+        default: true
+      fdroid-privileged-extension:
+        required: false
+        type: boolean
+        default: false
       update-channel:
         required: true
         type: string
@@ -25,6 +49,10 @@ on:
       allow-unauthorized-adb:
         required: true
         type: boolean
+      boot-animation:
+        required: false
+        type: boolean
+        default: false
       release-type:
         required: true
         type: string
@@ -58,6 +86,13 @@ env:
   RUSTUP_MAX_RETRIES: 10
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   RELEASE_TYPE: ${{ inputs.release-type }}
+  ADDITIONALS_ALTERINSTALLER: ${{ inputs.alterinstaller }}
+  ADDITIONALS_BCR: ${{ inputs.bcr }}
+  ADDITIONALS_CUSTOTA: ${{ inputs.custota }}
+  ADDITIONALS_MSD: ${{ inputs.msd }}
+  ADDITIONALS_OEMUNLOCKONBOOT: ${{ inputs.oemunlockonboot }}
+  ADDITIONALS_FDROID_PRIVILEGED_EXTENSION: ${{ inputs.fdroid-privileged-extension }}
+  ADDITIONALS_BOOT_ANIMATION: ${{ inputs.boot-animation }}
 
 jobs:
   build:
@@ -162,21 +197,25 @@ jobs:
           selection_metadata="${OUTPUTS_PATCHED_OTA}.selection.json"
           python3 - \
             "${selection_metadata}" \
+            "${OUTPUTS_PATCHED_OTA}" \
             "${ROM_FAMILY}" \
             "${DEVICE_NAME}" \
+            "${GRAPHENEOS_VERSION}" \
             "${MODULE_SELECTION_FINGERPRINT}" \
             "${OUTPUT_SCOPE}" <<'PY'
           import json
           import pathlib
           import sys
 
-          path, rom_family, device, fingerprint, output_scope = sys.argv[1:]
+          path, artifact_name, rom_family, device, version, fingerprint, output_scope = sys.argv[1:]
           data = {
+              "artifact_name": artifact_name,
               "device": device,
+              "grapheneos_version": version,
               "module_selection_fingerprint": fingerprint,
               "output_scope": output_scope,
               "rom_family": rom_family,
-              "schema_version": 1,
+              "schema_version": 2,
           }
           pathlib.Path(path).write_text(
               json.dumps(data, indent=2, sort_keys=True) + "\n",
@@ -230,9 +269,12 @@ jobs:
       - name: Publish OTA metadata
         if: inputs.publish && inputs.release-type != 'build-only'
         shell: bash
+        env:
+          GIT_COMMIT_EMAIL: ${{ secrets.EMAIL }}
+          GIT_COMMIT_NAME: ${{ github.repository_owner }}
         run: |
-          git config user.email "${{ secrets.EMAIL }}"
-          git config user.name "${{ github.repository_owner }}"
+          git config user.email "${GIT_COMMIT_EMAIL}"
+          git config user.name "${GIT_COMMIT_NAME}"
           current_commit="$(git rev-parse --short HEAD)"
           if [[ "${{ inputs.root }}" == 'true' ]]; then
             flavor='magisk'

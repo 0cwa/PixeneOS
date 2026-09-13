@@ -14,6 +14,36 @@ on:
         required: false
         type: boolean
         default: true
+      alterinstaller:
+        description: Include the AlterInstaller module
+        required: false
+        type: boolean
+        default: true
+      bcr:
+        description: Include the Basic Call Recorder module
+        required: false
+        type: boolean
+        default: true
+      custota:
+        description: Include the Custom OTA Updater module
+        required: false
+        type: boolean
+        default: true
+      msd:
+        description: Include the Mass Storage Device module
+        required: false
+        type: boolean
+        default: true
+      oemunlockonboot:
+        description: Include the OEM unlock on boot module
+        required: false
+        type: boolean
+        default: true
+      fdroid-privileged-extension:
+        description: Include the locked F-Droid Privileged Extension module
+        required: false
+        type: boolean
+        default: false
       magisk-preinit-device:
         description: Magisk preinit device
         required: false
@@ -32,6 +62,11 @@ on:
         required: false
         type: boolean
         default: false
+      boot-animation:
+        description: Include the local custom boot animation
+        required: false
+        type: boolean
+        default: false
       release-type:
         description: Release behavior
         required: true
@@ -46,18 +81,214 @@ permissions:
   contents: write
 
 jobs:
+  preflight:
+    if: github.event_name == 'schedule' || inputs.release-type == 'default'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      should_build: ${{ steps.existing_build.outputs.should_build }}
+      force_update: ${{ steps.scheduled_config.outputs.force_update }}
+      device_id: ${{ steps.scheduled_config.outputs.device_id }}
+      update_channel: ${{ steps.scheduled_config.outputs.update_channel }}
+      root: ${{ steps.scheduled_config.outputs.root }}
+      magisk_preinit_device: ${{ steps.scheduled_config.outputs.magisk_preinit_device }}
+      alterinstaller: ${{ steps.scheduled_config.outputs.alterinstaller }}
+      bcr: ${{ steps.scheduled_config.outputs.bcr }}
+      custota: ${{ steps.scheduled_config.outputs.custota }}
+      msd: ${{ steps.scheduled_config.outputs.msd }}
+      oemunlockonboot: ${{ steps.scheduled_config.outputs.oemunlockonboot }}
+      fdroid_privileged_extension: ${{ steps.scheduled_config.outputs.fdroid_privileged_extension }}
+      boot_animation: ${{ steps.scheduled_config.outputs.boot_animation }}
+      expected_variant: ${{ steps.selection_identity.outputs.expected_variant }}
+    env:
+      DEVICE_NAME: ${{ github.event_name == 'schedule' && 'bramble' || inputs.device-id }}
+      GRAPHENEOS_UPDATE_CHANNEL: ${{ inputs.update-channel || 'stable' }}
+      REPOSITORY: ${{ github.repository }}
+      ROOT: ${{ github.event_name == 'workflow_dispatch' && inputs.root || false }}
+    steps:
+      - name: Fetch shared implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init --quiet .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --quiet --no-tags --depth=1 origin "${GITHUB_SHA}"
+          git checkout --quiet --detach FETCH_HEAD
+
+      - name: Load scheduled env.toml configuration
+        id: scheduled_config
+        if: github.event_name == 'schedule'
+        shell: bash
+        env:
+          DEFAULT_DEVICE_NAME: bramble
+          DEFAULT_UPDATE_CHANNEL: stable
+          DEFAULT_ROOT: false
+          DEFAULT_MAGISK_PREINIT: sda10
+          DEFAULT_ALTERINSTALLER: true
+          DEFAULT_BCR: true
+          DEFAULT_CUSTOTA: true
+          DEFAULT_MSD: true
+          DEFAULT_OEMUNLOCKONBOOT: true
+          DEFAULT_FDROID_PRIVILEGED_EXTENSION: false
+          DEFAULT_BOOT_ANIMATION: false
+          DEFAULT_FORCE_UPDATE: false
+        run: |
+          set -euo pipefail
+          source src/util_functions.sh
+          check_toml_env
+
+          device_name="${DEVICE_NAME:-${DEFAULT_DEVICE_NAME}}"
+          update_channel="${GRAPHENEOS[UPDATE_CHANNEL]:-${DEFAULT_UPDATE_CHANNEL}}"
+          root="${ADDITIONALS[ROOT]:-${DEFAULT_ROOT}}"
+          magisk_preinit="${MAGISK[PREINIT]:-${DEFAULT_MAGISK_PREINIT}}"
+          alterinstaller="${ADDITIONALS[ALTERINSTALLER]:-${DEFAULT_ALTERINSTALLER}}"
+          bcr="${ADDITIONALS[BCR]:-${DEFAULT_BCR}}"
+          custota="${ADDITIONALS[CUSTOTA]:-${DEFAULT_CUSTOTA}}"
+          msd="${ADDITIONALS[MSD]:-${DEFAULT_MSD}}"
+          oemunlockonboot="${ADDITIONALS[OEMUNLOCKONBOOT]:-${DEFAULT_OEMUNLOCKONBOOT}}"
+          fdroid_privileged_extension="${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]:-${DEFAULT_FDROID_PRIVILEGED_EXTENSION}}"
+          boot_animation="${ADDITIONALS[BOOT_ANIMATION]:-${DEFAULT_BOOT_ANIMATION}}"
+          force_update="${FORCE_UPDATE:-${DEFAULT_FORCE_UPDATE}}"
+
+          validate_scheduled_boolean() {
+            local value="${1}"
+            local message="${2}"
+            case "${value}" in
+              true|false) ;;
+              *)
+                echo "::error::scheduled ${message}"
+                exit 1
+                ;;
+            esac
+          }
+
+          validate_scheduled_boolean "${root}" "ROOT must be true or false"
+          validate_scheduled_boolean "${alterinstaller}" "ALTERINSTALLER must be true or false"
+          validate_scheduled_boolean "${bcr}" "BCR must be true or false"
+          validate_scheduled_boolean "${custota}" "CUSTOTA must be true or false"
+          validate_scheduled_boolean "${msd}" "MSD must be true or false"
+          validate_scheduled_boolean "${oemunlockonboot}" "OEMUNLOCKONBOOT must be true or false"
+          validate_scheduled_boolean "${fdroid_privileged_extension}" "FDROID_PRIVILEGED_EXTENSION must be true or false"
+          validate_scheduled_boolean "${boot_animation}" "boot animation selection must be true or false"
+          validate_scheduled_boolean "${force_update}" "FORCE_UPDATE must be true or false"
+
+          {
+            echo "DEVICE_NAME=${device_name}"
+            echo "GRAPHENEOS_UPDATE_CHANNEL=${update_channel}"
+            echo "ROOT=${root}"
+            echo "MAGISK_PREINIT=${magisk_preinit}"
+            echo "ADDITIONALS_ALTERINSTALLER=${alterinstaller}"
+            echo "ADDITIONALS_BCR=${bcr}"
+            echo "ADDITIONALS_CUSTOTA=${custota}"
+            echo "ADDITIONALS_MSD=${msd}"
+            echo "ADDITIONALS_OEMUNLOCKONBOOT=${oemunlockonboot}"
+            echo "ADDITIONALS_FDROID_PRIVILEGED_EXTENSION=${fdroid_privileged_extension}"
+            echo "ADDITIONALS_BOOT_ANIMATION=${boot_animation}"
+            echo "FORCE_UPDATE=${force_update}"
+          } >> "${GITHUB_ENV}"
+          {
+            echo "device_id=${device_name}"
+            echo "update_channel=${update_channel}"
+            echo "root=${root}"
+            echo "magisk_preinit_device=${magisk_preinit}"
+            echo "alterinstaller=${alterinstaller}"
+            echo "bcr=${bcr}"
+            echo "custota=${custota}"
+            echo "msd=${msd}"
+            echo "oemunlockonboot=${oemunlockonboot}"
+            echo "fdroid_privileged_extension=${fdroid_privileged_extension}"
+            echo "boot_animation=${boot_animation}"
+            echo "force_update=${force_update}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Resolve GrapheneOS version
+        id: resolve_version
+        shell: bash
+        run: |
+          source src/fetcher.sh
+          get_latest_version
+          echo "GRAPHENEOS_VERSION=${VERSION[GRAPHENEOS]}" >> "${GITHUB_ENV}"
+          echo "magisk_version=${VERSION[MAGISK]}" >> "${GITHUB_OUTPUT}"
+          tag_ref="refs/tags/${VERSION[GRAPHENEOS]}"
+          if git ls-remote --exit-code --refs origin "${tag_ref}" >/dev/null; then
+            git fetch --quiet --depth=1 origin "${tag_ref}:${tag_ref}"
+          else
+            status=$?
+            [[ "${status}" -eq 2 ]] || exit "${status}"
+          fi
+
+      - name: Resolve expected selection identity
+        id: selection_identity
+        shell: bash
+        env:
+          DEVICE_NAME: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.device_id || inputs.device-id }}
+          ROM_FAMILY: grapheneos
+          GRAPHENEOS_UPDATE_CHANNEL: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.update_channel || inputs.update-channel || 'stable' }}
+          OUTPUT_SCOPE: published
+          ADDITIONALS_ROOT: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.root || inputs.root || false }}
+          MAGISK_PREINIT: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.magisk_preinit_device || inputs.magisk-preinit-device || 'sda10' }}
+          ADDITIONALS_ALTERINSTALLER: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.alterinstaller == 'true' || inputs.alterinstaller }}
+          ADDITIONALS_BCR: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.bcr == 'true' || inputs.bcr }}
+          ADDITIONALS_CUSTOTA: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.custota == 'true' || inputs.custota }}
+          ADDITIONALS_MSD: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.msd == 'true' || inputs.msd }}
+          ADDITIONALS_OEMUNLOCKONBOOT: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.oemunlockonboot == 'true' || inputs.oemunlockonboot }}
+          ADDITIONALS_FDROID_PRIVILEGED_EXTENSION: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.fdroid_privileged_extension == 'true' || inputs.fdroid-privileged-extension }}
+          ADDITIONALS_MAS_COMPATIBLE_SEPOLICY: ${{ github.event_name == 'workflow_dispatch' && inputs.compatible-sepolicy-patching || false }}
+          ADDITIONALS_DEBUG: ${{ github.event_name == 'workflow_dispatch' && inputs.allow-unauthorized-adb || false }}
+          ADDITIONALS_BOOT_ANIMATION: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.boot_animation || inputs.boot-animation || false }}
+        run: |
+          set -euo pipefail
+          identity_output=''
+          if identity_output="$(
+            source src/util_functions.sh
+            module_selection_fingerprint
+          )" && [[ "${identity_output}" =~ ^[0-9a-f]{64}$ ]]; then
+            printf 'expected_variant=%s\n' "${identity_output}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "::warning::Selection identity could not be resolved; existing-build preflight will continue with a build."
+            printf 'expected_variant=\n' >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Check existing release assets
+        id: existing_build
+        shell: bash
+        env:
+          REPOSITORY: ${{ github.repository }}
+          ROOT: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.root || inputs.root || false }}
+          DEBUG: ${{ github.event_name == 'workflow_dispatch' && inputs.allow-unauthorized-adb || false }}
+          MAGISK_VERSION: ${{ steps.resolve_version.outputs.magisk_version }}
+          ROM_FAMILY: grapheneos
+          OUTPUT_SCOPE: published
+          EXPECTED_VARIANT: ${{ steps.selection_identity.outputs.expected_variant }}
+          FORCE_UPDATE: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.force_update || false }}
+        run: src/ci/check_existing_build.sh
+
   build:
     uses: ./.github/workflows/build-rom.yml
+    needs: preflight
+    if: >-
+      always() &&
+      (
+        (github.event_name != 'schedule' && inputs.release-type != 'default') ||
+        needs.preflight.outputs.should_build == 'true'
+      )
     with:
       rom-family: grapheneos
-      # Scheduled builds intentionally follow the tracked env.toml device (bramble);
-      # manual dispatch retains shiba as its user-facing default.
-      device-id: ${{ github.event_name == 'schedule' && 'bramble' || inputs.device-id }}
-      root: ${{ github.event_name == 'workflow_dispatch' && inputs.root || false }}
-      magisk-preinit-device: ${{ inputs.magisk-preinit-device || 'sda10' }}
-      update-channel: ${{ inputs.update-channel || 'stable' }}
+      # Scheduled builds use resolved env.toml values; manual inputs remain authoritative.
+      device-id: ${{ github.event_name == 'schedule' && needs.preflight.outputs.device_id || inputs.device-id }}
+      root: ${{ github.event_name == 'schedule' && needs.preflight.outputs.root == 'true' || inputs.root }}
+      magisk-preinit-device: ${{ github.event_name == 'schedule' && needs.preflight.outputs.magisk_preinit_device || inputs.magisk-preinit-device || 'sda10' }}
+      update-channel: ${{ github.event_name == 'schedule' && needs.preflight.outputs.update_channel || inputs.update-channel || 'stable' }}
+      alterinstaller: ${{ github.event_name == 'schedule' && needs.preflight.outputs.alterinstaller == 'true' || inputs.alterinstaller }}
+      bcr: ${{ github.event_name == 'schedule' && needs.preflight.outputs.bcr == 'true' || inputs.bcr }}
+      custota: ${{ github.event_name == 'schedule' && needs.preflight.outputs.custota == 'true' || inputs.custota }}
+      msd: ${{ github.event_name == 'schedule' && needs.preflight.outputs.msd == 'true' || inputs.msd }}
+      oemunlockonboot: ${{ github.event_name == 'schedule' && needs.preflight.outputs.oemunlockonboot == 'true' || inputs.oemunlockonboot }}
+      fdroid-privileged-extension: ${{ github.event_name == 'schedule' && needs.preflight.outputs.fdroid_privileged_extension == 'true' || inputs.fdroid-privileged-extension }}
       compatible-sepolicy-patching: ${{ github.event_name == 'workflow_dispatch' && inputs.compatible-sepolicy-patching || false }}
       allow-unauthorized-adb: ${{ github.event_name == 'workflow_dispatch' && inputs.allow-unauthorized-adb || false }}
+      boot-animation: ${{ github.event_name == 'schedule' && needs.preflight.outputs.boot_animation == 'true' || inputs.boot-animation || false }}
       release-type: ${{ github.event_name == 'schedule' && 'default' || inputs.release-type }}
       publish: ${{ github.event_name == 'schedule' || inputs.release-type != 'build-only' }}
     secrets: inherit
