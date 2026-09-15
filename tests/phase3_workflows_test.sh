@@ -135,12 +135,18 @@ test_reusable_workflow() {
     'rom-family:' \
     "shared ROM workflow must accept a ROM family"
   assert_dispatch_default "${REUSABLE}" boot-animation false
+  assert_dispatch_default "${REUSABLE}" afsr true
   assert_contains \
     "${REUSABLE}" \
     'ADDITIONALS_BOOT_ANIMATION' \
     "shared workflow must pass the boot-animation selection"
+  assert_contains \
+    "${REUSABLE}" \
+    'ADDITIONALS_AFSR' \
+    "shared workflow must pass the AFSR selection"
   local contract input expected_type expected_default
   for contract in \
+    'afsr:boolean:true' \
     'alterinstaller:boolean:true' \
     'bcr:boolean:true' \
     'custota:boolean:true' \
@@ -215,6 +221,18 @@ test_release_triggers() {
     "${WORKFLOW_DIR}/release-lineage.yml" compatible-sepolicy-patching true
 }
 
+test_config_loading_isolated_to_grapheneos_schedule() {
+  local lineage="${WORKFLOW_DIR}/release-lineage.yml"
+  local build_only="${WORKFLOW_DIR}/phase3-build-only.yml"
+
+  assert_not_contains "${lineage}" 'env\.toml|check_toml_env' \
+    "LineageOS release must not load GrapheneOS env.toml configuration"
+  assert_not_contains "${build_only}" 'env\.toml|check_toml_env' \
+    "build-only acceptance must keep its declared defaults"
+  assert_contains "${build_only}" 'publish:[[:space:]]*false' \
+    "build-only acceptance must remain local-unpublished"
+}
+
 test_release_configuration_forwarding() {
   assert_contains \
     "${RELEASE}" \
@@ -254,14 +272,19 @@ test_release_configuration_forwarding() {
     'ADDITIONALS_MAS_COMPATIBLE_SEPOLICY' \
     'ADDITIONALS_DEBUG' \
     'ADDITIONALS_BOOT_ANIMATION' \
+    'ADDITIONALS_AFSR' \
     'MAGISK_VERSION:[[:space:]]*\$\{\{ steps\.resolve_version\.outputs\.magisk_version \}\}'; do
     assert_contains "${RELEASE}" "${identity_input}" \
       "release preflight must pass ${identity_input%%:*} to identity resolution"
   done
   assert_contains \
     "${RELEASE}" \
-    'force_update="\$\{FORCE_UPDATE:-\$\{DEFAULT_FORCE_UPDATE\}\}"' \
-    "scheduled configuration must read the top-level FORCE_UPDATE key"
+    'ADDITIONALS_AFSR:[[:space:]]*\$\{\{ github\.event_name == .schedule. && steps\.scheduled_config\.outputs\.afsr == .true. \|\| github\.event_name != .schedule. && inputs\.afsr \}\}' \
+    "release preflight must preserve scheduled AFSR=false"
+  assert_contains \
+    "${RELEASE}" \
+    'force_update="\$\(toml_resolve_value force_update "\$\{DEFAULT_FORCE_UPDATE\}"\)"' \
+    "scheduled configuration must resolve FORCE_UPDATE through the typed contract"
   assert_contains \
     "${RELEASE}" \
     'validate_scheduled_boolean "\$\{force_update\}" "FORCE_UPDATE must be true or false"' \
@@ -286,6 +309,7 @@ test_release_configuration_forwarding() {
     'DEFAULT_DEVICE_NAME:[[:space:]]*bramble' \
     'DEFAULT_UPDATE_CHANNEL:[[:space:]]*stable' \
     'DEFAULT_ROOT:[[:space:]]*false' \
+    'DEFAULT_AFSR:[[:space:]]*true' \
     'DEFAULT_MAGISK_PREINIT:[[:space:]]*sda10' \
     'DEFAULT_BOOT_ANIMATION:[[:space:]]*false' \
     'DEFAULT_FORCE_UPDATE:[[:space:]]*false'; do
@@ -300,6 +324,10 @@ test_release_configuration_forwarding() {
     "${RELEASE}" \
     'boot-animation:[[:space:]]*\$\{\{ github\.event_name == .schedule. && needs\.preflight\.outputs\.boot_animation == .true. \|\| inputs\.boot-animation \|\| false \}\}' \
     "boot animation must be forwarded with a default-off fallback"
+  assert_contains \
+    "${RELEASE}" \
+    'afsr:[[:space:]]*\$\{\{ github\.event_name == .schedule. && needs\.preflight\.outputs\.afsr == .true. \|\| github\.event_name != .schedule. && inputs\.afsr \}\}' \
+    "AFSR must be forwarded without converting scheduled false to true"
   assert_not_contains \
     "${RELEASE}" \
     'boot-animation:[[:space:]]*\$\{\{ github\.event_name == .schedule. && needs\.preflight\.outputs\.boot_animation \|\| inputs\.boot-animation' \
@@ -326,6 +354,7 @@ test_module_forwarding_contract() {
   local contract input config output
 
   for contract in \
+    'afsr:AFSR:afsr' \
     'alterinstaller:ALTERINSTALLER:alterinstaller' \
     'bcr:BCR:bcr' \
     'custota:CUSTOTA:custota' \
@@ -336,8 +365,8 @@ test_module_forwarding_contract() {
 
     assert_contains \
       "${RELEASE}" \
-      "ADDITIONALS\\[${config}\\]" \
-      "scheduled configuration must resolve ${config}"
+      "toml_resolve_value ${output}" \
+      "scheduled configuration must resolve ${config} through the typed contract"
     assert_contains \
       "${RELEASE}" \
       "echo \"${output}=" \
@@ -413,6 +442,7 @@ test_no_lineage_checkout_anywhere() {
 
 test_reusable_workflow
 test_release_triggers
+test_config_loading_isolated_to_grapheneos_schedule
 test_release_configuration_forwarding
 test_module_forwarding_contract
 test_publication_identity_is_step_scoped

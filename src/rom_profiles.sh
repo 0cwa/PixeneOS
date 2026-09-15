@@ -153,6 +153,7 @@ function module_selection_fingerprint() {
   local boot_animation_digest="disabled"
   local entry
   local -a module_entries=(
+    "afsr:AFSR"
     "alterinstaller:ALTERINSTALLER"
     "bcr:BCR"
     "custota:CUSTOTA"
@@ -212,6 +213,7 @@ function module_selection_fingerprint() {
   SELECTION_HELPER_COMMIT="${VERSION[AVBROOT_SETUP]}"
   SELECTION_LOCK_SHA256="${lock_digest}"
   SELECTION_PROFILE_SHA256="${profile_digest}"
+  SELECTION_MODULE_AFSR="${ADDITIONALS[AFSR]}"
   SELECTION_MODULE_ALTERINSTALLER="${ADDITIONALS[ALTERINSTALLER]}"
   SELECTION_MODULE_BCR="${ADDITIONALS[BCR]}"
   SELECTION_MODULE_CUSTOTA="${ADDITIONALS[CUSTOTA]}"

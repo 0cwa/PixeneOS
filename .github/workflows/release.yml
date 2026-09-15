@@ -14,6 +14,11 @@ on:
         required: false
         type: boolean
         default: true
+      afsr:
+        description: Include AFSR executable acquisition and PATH setup
+        required: false
+        type: boolean
+        default: true
       alterinstaller:
         description: Include the AlterInstaller module
         required: false
@@ -92,6 +97,7 @@ jobs:
       device_id: ${{ steps.scheduled_config.outputs.device_id }}
       update_channel: ${{ steps.scheduled_config.outputs.update_channel }}
       root: ${{ steps.scheduled_config.outputs.root }}
+      afsr: ${{ steps.scheduled_config.outputs.afsr }}
       magisk_preinit_device: ${{ steps.scheduled_config.outputs.magisk_preinit_device }}
       alterinstaller: ${{ steps.scheduled_config.outputs.alterinstaller }}
       bcr: ${{ steps.scheduled_config.outputs.bcr }}
@@ -101,11 +107,6 @@ jobs:
       fdroid_privileged_extension: ${{ steps.scheduled_config.outputs.fdroid_privileged_extension }}
       boot_animation: ${{ steps.scheduled_config.outputs.boot_animation }}
       expected_variant: ${{ steps.selection_identity.outputs.expected_variant }}
-    env:
-      DEVICE_NAME: ${{ github.event_name == 'schedule' && 'bramble' || inputs.device-id }}
-      GRAPHENEOS_UPDATE_CHANNEL: ${{ inputs.update-channel || 'stable' }}
-      REPOSITORY: ${{ github.repository }}
-      ROOT: ${{ github.event_name == 'workflow_dispatch' && inputs.root || false }}
     steps:
       - name: Fetch shared implementation
         shell: bash
@@ -124,6 +125,7 @@ jobs:
           DEFAULT_DEVICE_NAME: bramble
           DEFAULT_UPDATE_CHANNEL: stable
           DEFAULT_ROOT: false
+          DEFAULT_AFSR: true
           DEFAULT_MAGISK_PREINIT: sda10
           DEFAULT_ALTERINSTALLER: true
           DEFAULT_BCR: true
@@ -138,18 +140,19 @@ jobs:
           source src/util_functions.sh
           check_toml_env
 
-          device_name="${DEVICE_NAME:-${DEFAULT_DEVICE_NAME}}"
-          update_channel="${GRAPHENEOS[UPDATE_CHANNEL]:-${DEFAULT_UPDATE_CHANNEL}}"
-          root="${ADDITIONALS[ROOT]:-${DEFAULT_ROOT}}"
-          magisk_preinit="${MAGISK[PREINIT]:-${DEFAULT_MAGISK_PREINIT}}"
-          alterinstaller="${ADDITIONALS[ALTERINSTALLER]:-${DEFAULT_ALTERINSTALLER}}"
-          bcr="${ADDITIONALS[BCR]:-${DEFAULT_BCR}}"
-          custota="${ADDITIONALS[CUSTOTA]:-${DEFAULT_CUSTOTA}}"
-          msd="${ADDITIONALS[MSD]:-${DEFAULT_MSD}}"
-          oemunlockonboot="${ADDITIONALS[OEMUNLOCKONBOOT]:-${DEFAULT_OEMUNLOCKONBOOT}}"
-          fdroid_privileged_extension="${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]:-${DEFAULT_FDROID_PRIVILEGED_EXTENSION}}"
-          boot_animation="${ADDITIONALS[BOOT_ANIMATION]:-${DEFAULT_BOOT_ANIMATION}}"
-          force_update="${FORCE_UPDATE:-${DEFAULT_FORCE_UPDATE}}"
+          device_name="$(toml_resolve_value device_name "${DEFAULT_DEVICE_NAME}")"
+          update_channel="$(toml_resolve_value update_channel "${DEFAULT_UPDATE_CHANNEL}")"
+          root="$(toml_resolve_value root "${DEFAULT_ROOT}")"
+          afsr="$(toml_resolve_value afsr "${DEFAULT_AFSR}")"
+          magisk_preinit="$(toml_resolve_value magisk_preinit "${DEFAULT_MAGISK_PREINIT}")"
+          alterinstaller="$(toml_resolve_value alterinstaller "${DEFAULT_ALTERINSTALLER}")"
+          bcr="$(toml_resolve_value bcr "${DEFAULT_BCR}")"
+          custota="$(toml_resolve_value custota "${DEFAULT_CUSTOTA}")"
+          msd="$(toml_resolve_value msd "${DEFAULT_MSD}")"
+          oemunlockonboot="$(toml_resolve_value oemunlockonboot "${DEFAULT_OEMUNLOCKONBOOT}")"
+          fdroid_privileged_extension="$(toml_resolve_value fdroid_privileged_extension "${DEFAULT_FDROID_PRIVILEGED_EXTENSION}")"
+          boot_animation="$(toml_resolve_value boot_animation "${DEFAULT_BOOT_ANIMATION}")"
+          force_update="$(toml_resolve_value force_update "${DEFAULT_FORCE_UPDATE}")"
 
           validate_scheduled_boolean() {
             local value="${1}"
@@ -164,6 +167,7 @@ jobs:
           }
 
           validate_scheduled_boolean "${root}" "ROOT must be true or false"
+          validate_scheduled_boolean "${afsr}" "AFSR must be true or false"
           validate_scheduled_boolean "${alterinstaller}" "ALTERINSTALLER must be true or false"
           validate_scheduled_boolean "${bcr}" "BCR must be true or false"
           validate_scheduled_boolean "${custota}" "CUSTOTA must be true or false"
@@ -172,11 +176,15 @@ jobs:
           validate_scheduled_boolean "${fdroid_privileged_extension}" "FDROID_PRIVILEGED_EXTENSION must be true or false"
           validate_scheduled_boolean "${boot_animation}" "boot animation selection must be true or false"
           validate_scheduled_boolean "${force_update}" "FORCE_UPDATE must be true or false"
+          [[ -n "${device_name}" ]] || { echo "::error::DEVICE_NAME must not be empty"; exit 1; }
+          [[ -n "${update_channel}" ]] || { echo "::error::update channel must not be empty"; exit 1; }
+          [[ -n "${magisk_preinit}" ]] || { echo "::error::MAGISK_PREINIT must not be empty"; exit 1; }
 
           {
             echo "DEVICE_NAME=${device_name}"
             echo "GRAPHENEOS_UPDATE_CHANNEL=${update_channel}"
             echo "ROOT=${root}"
+            echo "ADDITIONALS_AFSR=${afsr}"
             echo "MAGISK_PREINIT=${magisk_preinit}"
             echo "ADDITIONALS_ALTERINSTALLER=${alterinstaller}"
             echo "ADDITIONALS_BCR=${bcr}"
@@ -191,6 +199,7 @@ jobs:
             echo "device_id=${device_name}"
             echo "update_channel=${update_channel}"
             echo "root=${root}"
+            echo "afsr=${afsr}"
             echo "magisk_preinit_device=${magisk_preinit}"
             echo "alterinstaller=${alterinstaller}"
             echo "bcr=${bcr}"
@@ -227,6 +236,7 @@ jobs:
           GRAPHENEOS_UPDATE_CHANNEL: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.update_channel || inputs.update-channel || 'stable' }}
           OUTPUT_SCOPE: published
           ADDITIONALS_ROOT: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.root || inputs.root || false }}
+          ADDITIONALS_AFSR: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.afsr == 'true' || github.event_name != 'schedule' && inputs.afsr }}
           MAGISK_PREINIT: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.magisk_preinit_device || inputs.magisk-preinit-device || 'sda10' }}
           ADDITIONALS_ALTERINSTALLER: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.alterinstaller == 'true' || inputs.alterinstaller }}
           ADDITIONALS_BCR: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.bcr == 'true' || inputs.bcr }}
@@ -278,6 +288,7 @@ jobs:
       # Scheduled builds use resolved env.toml values; manual inputs remain authoritative.
       device-id: ${{ github.event_name == 'schedule' && needs.preflight.outputs.device_id || inputs.device-id }}
       root: ${{ github.event_name == 'schedule' && needs.preflight.outputs.root == 'true' || inputs.root }}
+      afsr: ${{ github.event_name == 'schedule' && needs.preflight.outputs.afsr == 'true' || github.event_name != 'schedule' && inputs.afsr }}
       magisk-preinit-device: ${{ github.event_name == 'schedule' && needs.preflight.outputs.magisk_preinit_device || inputs.magisk-preinit-device || 'sda10' }}
       update-channel: ${{ github.event_name == 'schedule' && needs.preflight.outputs.update_channel || inputs.update-channel || 'stable' }}
       alterinstaller: ${{ github.event_name == 'schedule' && needs.preflight.outputs.alterinstaller == 'true' || inputs.alterinstaller }}

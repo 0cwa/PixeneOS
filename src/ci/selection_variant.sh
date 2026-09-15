@@ -22,6 +22,7 @@ function selection_variant_manifest() {
     SELECTION_HELPER_COMMIT
     SELECTION_LOCK_SHA256
     SELECTION_PROFILE_SHA256
+    SELECTION_MODULE_AFSR
     SELECTION_MODULE_ALTERINSTALLER
     SELECTION_MODULE_BCR
     SELECTION_MODULE_CUSTOTA
@@ -44,6 +45,7 @@ function selection_variant_manifest() {
     SELECTION_DEBUG \
     SELECTION_COMPATIBLE_SEPOLICY \
     SELECTION_CLEAR_VBMETA_FLAGS \
+    SELECTION_MODULE_AFSR \
     SELECTION_MODULE_ALTERINSTALLER \
     SELECTION_MODULE_BCR \
     SELECTION_MODULE_CUSTOTA \
@@ -87,6 +89,7 @@ function selection_variant_manifest() {
     "helper_commit=${SELECTION_HELPER_COMMIT}" \
     "lock_sha256=${SELECTION_LOCK_SHA256}" \
     "profile_sha256=${SELECTION_PROFILE_SHA256}" \
+    "module.afsr=${SELECTION_MODULE_AFSR}" \
     "module.alterinstaller=${SELECTION_MODULE_ALTERINSTALLER}" \
     "module.bcr=${SELECTION_MODULE_BCR}" \
     "module.custota=${SELECTION_MODULE_CUSTOTA}" \

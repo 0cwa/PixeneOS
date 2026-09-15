@@ -99,6 +99,7 @@ test_invalid_compatible_sepolicy_fails_closed() (
 set_selection_fixture() {
   ROM_FAMILY="grapheneos"
   ADDITIONALS[ROOT]="false"
+  ADDITIONALS[AFSR]="true"
   ADDITIONALS[CUSTOTA]="true"
   ADDITIONALS[MSD]="true"
   ADDITIONALS[BCR]="true"
@@ -123,7 +124,7 @@ fingerprint() {
 }
 
 test_selection_fingerprint() (
-  local baseline repeated root_changed rom_changed module_changed
+  local baseline repeated afsr_on afsr_off root_changed rom_changed module_changed
   local boot_changed second_boot_changed fingerprint_input
 
   load_contract
@@ -134,6 +135,15 @@ test_selection_fingerprint() (
   module_selection_fingerprint >/dev/null
   assert_equals "${baseline}" "$(selection_variant_fingerprint)" \
     "build fingerprint uses the shared selection helper"
+
+  afsr_on="${baseline}"
+  ADDITIONALS[AFSR]="false"
+  afsr_off="$(fingerprint)"
+  [[ "${afsr_off}" != "${afsr_on}" ]] ||
+    fail "AFSR-on and AFSR-off selections collided"
+  ADDITIONALS[AFSR]="true"
+  assert_equals "${afsr_on}" "$(fingerprint)" \
+    "AFSR-on selection did not preserve the exact identity"
 
   fingerprint_input="${TEST_ROOT}/fingerprint-input-${BASHPID}"
   sha256sum() {

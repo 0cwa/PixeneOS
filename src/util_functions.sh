@@ -845,85 +845,287 @@ function generate_ota_info() {
   OUTPUTS[PATCHED_OTA]="${DEVICE_NAME}-${VERSION[GRAPHENEOS]}-${flavor}${debug_suffix}-${MODULE_SELECTION_FINGERPRINT}-$(git rev-parse --short HEAD)$(dirty_suffix).zip"
 }
 
-function check_toml_env() {
-  declare -A config_vars
-  toml_file="env.toml"
+declare -Ag TOML_CONFIG_PRESENT=()
+declare -Ag TOML_CONFIG_VALUES=()
 
-  if [ -f "$toml_file" ]; then
-    while IFS='=' read -r key value; do
-      key=$(echo "$key" | xargs)                                  # Trim whitespace
-      value=$(echo "$value" | xargs | sed -E 's/^"([^"]*)"$/\1/') # Trim whitespace and quotes
-      if [[ -n "$key" && -n "$value" ]]; then
-        config_vars["$key"]="$value"
-      fi
-    done < <(grep -v '^#' "$toml_file") # Ignore comments
+function _toml_trim() {
+  local value="${1}"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "${value}"
+}
 
-    if [[ ${#config_vars[@]} -gt 0 ]]; then
-      echo -e "Found variables in \`${toml_file}\` and will take precedence over other values.\n"
-      for key in "${!config_vars[@]}"; do
-        echo -e "${key}: ${config_vars[$key]}"
+function _toml_fail() {
+  echo "Error: ${1}" >&2
+  return 1
+}
 
-        if [[ ! "${key}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ &&
-          ! "${key}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*\[[a-zA-Z_][a-zA-Z0-9_]*\]$ ]]; then
-          echo "Error: malformed configuration key: ${key}" >&2
-          return 1
-        fi
+function _toml_decode_string() {
+  local raw="${1}"
+  local value="${raw:1:${#raw}-2}"
+  local decoded='' char next index
 
-        case "${key}" in
-          DEVICE_NAME|INTERACTIVE_MODE|ROM_FAMILY|OUTPUT_SCOPE|\
-          PIXENEOS_RELEASE_OWNER|PIXENEOS_RELEASE_REPOSITORY|\
-          PIXENEOS_RELEASE_BASE_URL|PIXENEOS_AVBROOT_SETUP_SOURCE)
-            printf -v "${key}" '%s' "${config_vars[$key]}"
-            ;;
-          FORCE_UPDATE)
-            printf -v FORCE_UPDATE '%s' "${config_vars[$key]}"
-            ;;
-          'GRAPHENEOS[UPDATE_CHANNEL]')
-            GRAPHENEOS[UPDATE_CHANNEL]="${config_vars[$key]}"
-            ;;
-          'ADDITIONALS[AFSR]')
-            ADDITIONALS[AFSR]="${config_vars[$key]}"
-            ;;
-          'ADDITIONALS[ALTERINSTALLER]')
-            ADDITIONALS[ALTERINSTALLER]="${config_vars[$key]}"
-            ;;
-          'ADDITIONALS[BCR]')
-            ADDITIONALS[BCR]="${config_vars[$key]}"
-            ;;
-          'ADDITIONALS[CUSTOTA]')
-            ADDITIONALS[CUSTOTA]="${config_vars[$key]}"
-            ;;
-          'ADDITIONALS[MSD]')
-            ADDITIONALS[MSD]="${config_vars[$key]}"
-            ;;
-          'ADDITIONALS[OEMUNLOCKONBOOT]')
-            ADDITIONALS[OEMUNLOCKONBOOT]="${config_vars[$key]}"
-            ;;
-          'ADDITIONALS[BOOT_ANIMATION]')
-            ADDITIONALS[BOOT_ANIMATION]="${config_vars[$key]}"
-            ;;
-          'ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]')
-            ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]="${config_vars[$key]}"
-            ;;
-          'MAGISK[REPOSITORY]')
-            MAGISK[REPOSITORY]="${config_vars[$key]}"
-            ;;
-          ROOT)
-            ADDITIONALS[ROOT]="${config_vars[$key]}"
-            ;;
-          MAGISK_PREINIT)
-            MAGISK[PREINIT]="${config_vars[$key]}"
-            ;;
-          *)
-            echo "Error: unsupported configuration key: ${key}" >&2
-            return 1
-            ;;
-        esac
-      done
+  for ((index = 0; index < ${#value}; index++)); do
+    char="${value:index:1}"
+    if [[ "${char}" == "\\" ]]; then
+      index=$((index + 1))
+      [[ ${index} -lt ${#value} ]] || return 1
+      next="${value:index:1}"
+      [[ "${next}" == "\\" || "${next}" == '"' ]] || return 1
+      decoded+="${next}"
+    elif [[ "${char}" == '"' || "${char}" == $'\n' || "${char}" == $'\r' ]]; then
+      return 1
     else
-      echo -e "Failed to find the required variables in \`${toml_file}\`.\n"
-      exit 1
+      decoded+="${char}"
     fi
+  done
+
+  printf '%s' "${decoded}"
+}
+
+function _toml_key_definition() {
+  local section="${1}"
+  local key="${2}"
+  local legacy_mode="${3}"
+
+  TOML_KEY_CANONICAL=''
+  TOML_KEY_TYPE=''
+
+  # These are the only accepted spellings. The bracketed names are retained
+  # because existing env.toml files use them and they are not shell syntax.
+  case "${key}" in
+    DEVICE_NAME) TOML_KEY_CANONICAL=device_name; TOML_KEY_TYPE=string ;;
+    ROM_FAMILY) TOML_KEY_CANONICAL=rom_family; TOML_KEY_TYPE=string ;;
+    INTERACTIVE_MODE) TOML_KEY_CANONICAL=interactive_mode; TOML_KEY_TYPE=boolean ;;
+    OUTPUT_SCOPE) TOML_KEY_CANONICAL=output_scope; TOML_KEY_TYPE=string ;;
+    FORCE_UPDATE) TOML_KEY_CANONICAL=force_update; TOML_KEY_TYPE=boolean ;;
+    ROOT) TOML_KEY_CANONICAL=root; TOML_KEY_TYPE=boolean ;;
+    MAGISK_PREINIT) TOML_KEY_CANONICAL=magisk_preinit; TOML_KEY_TYPE=string ;;
+    'GRAPHENEOS[UPDATE_CHANNEL]') TOML_KEY_CANONICAL=update_channel; TOML_KEY_TYPE=string ;;
+    'MAGISK[REPOSITORY]') TOML_KEY_CANONICAL=magisk_repository; TOML_KEY_TYPE=string ;;
+    'ADDITIONALS[AFSR]') TOML_KEY_CANONICAL=afsr; TOML_KEY_TYPE=boolean ;;
+    'ADDITIONALS[ALTERINSTALLER]') TOML_KEY_CANONICAL=alterinstaller; TOML_KEY_TYPE=boolean ;;
+    'ADDITIONALS[BCR]') TOML_KEY_CANONICAL=bcr; TOML_KEY_TYPE=boolean ;;
+    'ADDITIONALS[CUSTOTA]') TOML_KEY_CANONICAL=custota; TOML_KEY_TYPE=boolean ;;
+    'ADDITIONALS[MSD]') TOML_KEY_CANONICAL=msd; TOML_KEY_TYPE=boolean ;;
+    'ADDITIONALS[OEMUNLOCKONBOOT]') TOML_KEY_CANONICAL=oemunlockonboot; TOML_KEY_TYPE=boolean ;;
+    'ADDITIONALS[BOOT_ANIMATION]') TOML_KEY_CANONICAL=boot_animation; TOML_KEY_TYPE=boolean ;;
+    'ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]')
+      TOML_KEY_CANONICAL=fdroid_privileged_extension
+      TOML_KEY_TYPE=boolean
+      ;;
+    PIXENEOS_RELEASE_OWNER) TOML_KEY_CANONICAL=release_owner; TOML_KEY_TYPE=string ;;
+    PIXENEOS_RELEASE_REPOSITORY) TOML_KEY_CANONICAL=release_repository; TOML_KEY_TYPE=string ;;
+    PIXENEOS_RELEASE_BASE_URL) TOML_KEY_CANONICAL=release_base_url; TOML_KEY_TYPE=string ;;
+    PIXENEOS_AVBROOT_SETUP_SOURCE) TOML_KEY_CANONICAL=setup_source; TOML_KEY_TYPE=string ;;
+    *) return 1 ;;
+  esac
+
+  if [[ "${legacy_mode}" == true ]]; then
+    return 0
+  fi
+
+  case "${section}:${TOML_KEY_CANONICAL}" in
+    device:device_name|device:rom_family|device:update_channel|device:magisk_repository)
+      ;;
+    build:interactive_mode|build:output_scope|build:force_update|build:root|\
+      build:magisk_preinit|build:afsr|build:alterinstaller|build:bcr|\
+      build:custota|build:msd|build:oemunlockonboot|build:boot_animation|\
+      build:fdroid_privileged_extension)
+      ;;
+    github:release_owner|github:release_repository|github:release_base_url|github:setup_source)
+      ;;
+    *)
+      TOML_KEY_CANONICAL=''
+      TOML_KEY_TYPE=''
+      return 1
+      ;;
+  esac
+}
+
+function _toml_caller_override_present() {
+  [[ ${DECLARATION_CALLER_PRESENT[${1}]+x} ]]
+}
+
+function _toml_apply_value() {
+  local canonical="${1}"
+  local value="${2}"
+
+  _toml_caller_override_present "${canonical}" && return 0
+  case "${canonical}" in
+    device_name) DEVICE_NAME="${value}" ;;
+    rom_family) ROM_FAMILY="${value}" ;;
+    interactive_mode) INTERACTIVE_MODE="${value}" ;;
+    output_scope) OUTPUT_SCOPE="${value}" ;;
+    force_update) FORCE_UPDATE="${value}" ;;
+    root) ADDITIONALS[ROOT]="${value}" ;;
+    magisk_preinit) MAGISK[PREINIT]="${value}" ;;
+    update_channel) GRAPHENEOS[UPDATE_CHANNEL]="${value}" ;;
+    magisk_repository) MAGISK[REPOSITORY]="${value}" ;;
+    release_owner) PIXENEOS_RELEASE_OWNER="${value}" ;;
+    release_repository) PIXENEOS_RELEASE_REPOSITORY="${value}" ;;
+    release_base_url) PIXENEOS_RELEASE_BASE_URL="${value}" ;;
+    setup_source) PIXENEOS_AVBROOT_SETUP_SOURCE="${value}" ;;
+    afsr) ADDITIONALS[AFSR]="${value}" ;;
+    alterinstaller) ADDITIONALS[ALTERINSTALLER]="${value}" ;;
+    bcr) ADDITIONALS[BCR]="${value}" ;;
+    custota) ADDITIONALS[CUSTOTA]="${value}" ;;
+    msd) ADDITIONALS[MSD]="${value}" ;;
+    oemunlockonboot) ADDITIONALS[OEMUNLOCKONBOOT]="${value}" ;;
+    boot_animation) ADDITIONALS[BOOT_ANIMATION]="${value}" ;;
+    fdroid_privileged_extension) ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]="${value}" ;;
+    *) return 1 ;;
+  esac
+}
+
+function check_toml_env() {
+  local toml_file='env.toml'
+  local line section='' raw_key raw_value key value type
+  local legacy_mode=true seen_section=false
+  declare -A seen_sections=()
+
+  TOML_CONFIG_PRESENT=()
+  TOML_CONFIG_VALUES=()
+  [[ -f "${toml_file}" ]] || return 0
+
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    line="$(_toml_trim "${line}")"
+    [[ -z "${line}" || "${line}" == \#* ]] && continue
+
+    if [[ "${line}" =~ ^\[([a-z]+)\]$ ]]; then
+      section="${BASH_REMATCH[1]}"
+      case "${section}" in
+        device|build|github) ;;
+        *) _toml_fail "unknown configuration section: ${section}"; return 1 ;;
+      esac
+      [[ ${seen_sections[${section}]+x} ]] && {
+        _toml_fail "duplicate configuration section: ${section}"
+        return 1
+      }
+      seen_sections[${section}]=true
+      seen_section=true
+      [[ "${section}" != device ]] && legacy_mode=false
+      continue
+    fi
+
+    [[ "${line}" == \[* ]] && {
+      _toml_fail "malformed configuration section: ${line}"
+      return 1
+    }
+    [[ "${line}" =~ ^([^=]+)=(.*)$ ]] || {
+      _toml_fail "malformed configuration assignment: ${line}"
+      return 1
+    }
+    raw_key="$(_toml_trim "${BASH_REMATCH[1]}")"
+    raw_value="$(_toml_trim "${BASH_REMATCH[2]}")"
+
+    case "${raw_key}" in
+      \'*\')
+        [[ "${raw_key: -1}" == "'" && ${#raw_key} -gt 2 ]] || {
+          _toml_fail "malformed configuration key: ${raw_key}"
+          return 1
+        }
+        key="${raw_key:1:${#raw_key}-2}"
+        ;;
+      *) key="${raw_key}" ;;
+    esac
+    [[ "${key}" =~ ^[A-Z_][A-Z0-9_]*$ ||
+      "${key}" =~ ^(GRAPHENEOS|ADDITIONALS|MAGISK)\[[A-Z_][A-Z0-9_]*\]$ ]] || {
+      _toml_fail "malformed configuration key: ${key}"
+      return 1
+    }
+
+    if ! _toml_key_definition "${section}" "${key}" "${legacy_mode}"; then
+      _toml_fail "unsupported configuration key in [${section:-legacy}]: ${key}"
+      return 1
+    fi
+    type="${TOML_KEY_TYPE}"
+
+    case "${raw_value}" in
+      true|false) value="${raw_value}" ;;
+      '"'*)
+        [[ "${raw_value: -1}" == '"' && ${#raw_value} -ge 2 ]] || {
+          _toml_fail "malformed configuration value for ${key}"
+          return 1
+        }
+        value="$(_toml_decode_string "${raw_value}")" || {
+          _toml_fail "malformed configuration string for ${key}"
+          return 1
+        }
+        ;;
+      *)
+        _toml_fail "malformed configuration value for ${key}"
+        return 1
+        ;;
+    esac
+
+    if [[ "${type}" == string && ( "${raw_value}" == true || "${raw_value}" == false ) ]]; then
+      _toml_fail "configuration value for ${key} must be a quoted string"
+      return 1
+    fi
+
+    if [[ "${type}" == boolean ]]; then
+      [[ "${value}" == true || "${value}" == false ]] || {
+        _toml_fail "configuration value for ${key} must be true or false"
+        return 1
+      }
+    fi
+    [[ "${value}" != *$'\n'* && "${value}" != *$'\r'* ]] || {
+      _toml_fail "configuration value for ${key} contains a newline"
+      return 1
+    }
+
+    local canonical="${TOML_KEY_CANONICAL}"
+    [[ ${TOML_CONFIG_PRESENT[${canonical}]+x} ]] && {
+      _toml_fail "duplicate configuration assignment: ${canonical}"
+      return 1
+    }
+    TOML_CONFIG_PRESENT[${canonical}]=true
+    TOML_CONFIG_VALUES[${canonical}]="${value}"
+    _toml_apply_value "${canonical}" "${value}"
+  done <"${toml_file}"
+
+  if [[ "${seen_section}" == true ]]; then
+    echo "Loaded typed configuration from \`${toml_file}\`."
+  fi
+}
+
+function toml_config_has() {
+  [[ ${TOML_CONFIG_PRESENT[${1}]+x} ]]
+}
+
+function toml_resolve_value() {
+  local canonical="${1}"
+  local declaration_default="${2}"
+
+  if _toml_caller_override_present "${canonical}"; then
+    case "${canonical}" in
+      device_name) printf '%s' "${DEVICE_NAME}" ;;
+      rom_family) printf '%s' "${ROM_FAMILY}" ;;
+      interactive_mode) printf '%s' "${INTERACTIVE_MODE}" ;;
+      output_scope) printf '%s' "${OUTPUT_SCOPE}" ;;
+      update_channel) printf '%s' "${GRAPHENEOS_UPDATE_CHANNEL}" ;;
+      magisk_preinit) printf '%s' "${MAGISK_PREINIT}" ;;
+      release_owner) printf '%s' "${PIXENEOS_RELEASE_OWNER}" ;;
+      release_repository) printf '%s' "${PIXENEOS_RELEASE_REPOSITORY}" ;;
+      release_base_url) printf '%s' "${PIXENEOS_RELEASE_BASE_URL}" ;;
+      setup_source) printf '%s' "${PIXENEOS_AVBROOT_SETUP_SOURCE}" ;;
+      force_update) printf '%s' "${FORCE_UPDATE}" ;;
+      root) printf '%s' "${ADDITIONALS_ROOT}" ;;
+      afsr) printf '%s' "${ADDITIONALS_AFSR}" ;;
+      alterinstaller) printf '%s' "${ADDITIONALS_ALTERINSTALLER}" ;;
+      bcr) printf '%s' "${ADDITIONALS_BCR}" ;;
+      custota) printf '%s' "${ADDITIONALS_CUSTOTA}" ;;
+      msd) printf '%s' "${ADDITIONALS_MSD}" ;;
+      oemunlockonboot) printf '%s' "${ADDITIONALS_OEMUNLOCKONBOOT}" ;;
+      boot_animation) printf '%s' "${ADDITIONALS_BOOT_ANIMATION}" ;;
+      fdroid_privileged_extension) printf '%s' "${ADDITIONALS_FDROID_PRIVILEGED_EXTENSION}" ;;
+      *) return 1 ;;
+    esac
+  elif toml_config_has "${canonical}"; then
+    printf '%s' "${TOML_CONFIG_VALUES[${canonical}]}"
+  else
+    printf '%s' "${declaration_default}"
   fi
 }
 

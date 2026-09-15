@@ -11,6 +11,35 @@ declare -A MAGISK
 declare -A OUTPUTS
 declare -A ROM_PROFILE
 declare -A VERSION
+declare -A DECLARATION_CALLER_PRESENT
+
+if [[ ! ${DECLARATION_CALLER_CAPTURED+x} ]]; then
+  # Capture explicitly supplied caller values before declaration defaults are
+  # installed. Nested sources include this file again; they must not turn
+  # declaration defaults into apparent caller overrides.
+  [[ ${DEVICE_NAME+x} ]] && DECLARATION_CALLER_PRESENT[device_name]=true
+  [[ ${INTERACTIVE_MODE+x} ]] && DECLARATION_CALLER_PRESENT[interactive_mode]=true
+  [[ ${ROM_FAMILY+x} ]] && DECLARATION_CALLER_PRESENT[rom_family]=true
+  [[ ${OUTPUT_SCOPE+x} ]] && DECLARATION_CALLER_PRESENT[output_scope]=true
+  [[ ${GRAPHENEOS_UPDATE_CHANNEL+x} ]] && DECLARATION_CALLER_PRESENT[update_channel]=true
+  [[ ${MAGISK_PREINIT+x} ]] && DECLARATION_CALLER_PRESENT[magisk_preinit]=true
+  [[ ${PIXENEOS_RELEASE_OWNER+x} ]] && DECLARATION_CALLER_PRESENT[release_owner]=true
+  [[ ${PIXENEOS_RELEASE_REPOSITORY+x} ]] && DECLARATION_CALLER_PRESENT[release_repository]=true
+  [[ ${PIXENEOS_RELEASE_BASE_URL+x} ]] && DECLARATION_CALLER_PRESENT[release_base_url]=true
+  [[ ${PIXENEOS_AVBROOT_SETUP_SOURCE+x} ]] && DECLARATION_CALLER_PRESENT[setup_source]=true
+  [[ ${FORCE_UPDATE+x} ]] && DECLARATION_CALLER_PRESENT[force_update]=true
+  [[ ${ADDITIONALS_ROOT+x} ]] && DECLARATION_CALLER_PRESENT[root]=true
+  [[ ${ADDITIONALS_AFSR+x} ]] && DECLARATION_CALLER_PRESENT[afsr]=true
+  [[ ${ADDITIONALS_ALTERINSTALLER+x} ]] && DECLARATION_CALLER_PRESENT[alterinstaller]=true
+  [[ ${ADDITIONALS_BCR+x} ]] && DECLARATION_CALLER_PRESENT[bcr]=true
+  [[ ${ADDITIONALS_CUSTOTA+x} ]] && DECLARATION_CALLER_PRESENT[custota]=true
+  [[ ${ADDITIONALS_MSD+x} ]] && DECLARATION_CALLER_PRESENT[msd]=true
+  [[ ${ADDITIONALS_OEMUNLOCKONBOOT+x} ]] && DECLARATION_CALLER_PRESENT[oemunlockonboot]=true
+  [[ ${ADDITIONALS_BOOT_ANIMATION+x} ]] && DECLARATION_CALLER_PRESENT[boot_animation]=true
+  [[ ${ADDITIONALS_FDROID_PRIVILEGED_EXTENSION+x} ]] &&
+    DECLARATION_CALLER_PRESENT[fdroid_privileged_extension]=true
+  DECLARATION_CALLER_CAPTURED=true
+fi
 
 # Build Specifications
 ARCH="x86_64-unknown-linux-gnu" # for Linux
