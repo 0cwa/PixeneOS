@@ -193,8 +193,14 @@ jobs:
             echo "GRAPHENEOS_VERSION=${VERSION[GRAPHENEOS]}"
             echo "MODULE_SELECTION_FINGERPRINT=${MODULE_SELECTION_FINGERPRINT}"
             echo "OUTPUTS_PATCHED_OTA=${OUTPUTS[PATCHED_OTA]}"
+            echo "ROM_PROFILE_PROVIDER=${ROM_PROFILE[PROVIDER]}"
             echo "WORKDIR=${WORKDIR}"
           } >> "${GITHUB_ENV}"
+          if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
+            echo 'ROM_FLAVOR=magisk' >> "${GITHUB_ENV}"
+          else
+            echo 'ROM_FLAVOR=rootless' >> "${GITHUB_ENV}"
+          fi
 
       - name: Record build metadata
         shell: bash
@@ -277,36 +283,10 @@ jobs:
         env:
           GIT_COMMIT_EMAIL: ${{ secrets.EMAIL }}
           GIT_COMMIT_NAME: ${{ github.repository_owner }}
+          OTA_ARTIFACT_PATH: ${{ env.OUTPUTS_PATCHED_OTA }}
+          OTA_METADATA_PATH: ${{ env.DEVICE_NAME }}.json
+          ROM_FLAVOR: ${{ env.ROM_FLAVOR }}
+          ROM_PROFILE_PROVIDER: ${{ env.ROM_PROFILE_PROVIDER }}
+          SELECTION_METADATA_PATH: ${{ env.SELECTION_METADATA }}
         run: |
-          git config user.email "${GIT_COMMIT_EMAIL}"
-          git config user.name "${GIT_COMMIT_NAME}"
-          current_commit="$(git rev-parse --short HEAD)"
-          if [[ "${{ inputs.root }}" == 'true' ]]; then
-            flavor='magisk'
-          else
-            flavor='rootless'
-          fi
-
-          git checkout gh-pages
-          target_file="${flavor}/${DEVICE_NAME}.json"
-          variant_file="variants/${ROM_FAMILY}/${flavor}/${DEVICE_NAME}-${MODULE_SELECTION_FINGERPRINT}.json"
-          mkdir -p -- "${flavor}" "$(dirname -- "${variant_file}")"
-          [[ -f "${DEVICE_NAME}.json" ]] || {
-            echo "::error::Missing generated OTA metadata for ${DEVICE_NAME}"
-            exit 1
-          }
-          cp -- "${DEVICE_NAME}.json" "${target_file}"
-          cp -- "${DEVICE_NAME}.json" "${variant_file}"
-          git add -- "${target_file}" "${variant_file}"
-
-          if [[ "${RELEASE_TYPE}" == 'force-publish' ]]; then
-            marker_file="force-publish/${DEVICE_NAME}.marker"
-            mkdir -p -- "$(dirname -- "${marker_file}")"
-            printf 'force-publish run %s (attempt %s)\n' \
-              "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" > "${marker_file}"
-            git add -- "${marker_file}"
-          fi
-          if ! git diff-index --quiet HEAD; then
-            git commit -m "release(${current_commit}): publish ${ROM_FAMILY} ${GRAPHENEOS_VERSION} ${MODULE_SELECTION_FINGERPRINT}"
-            git push origin gh-pages
-          fi
+          bash src/ci/publish_ota.sh

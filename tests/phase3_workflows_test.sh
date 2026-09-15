@@ -400,13 +400,13 @@ test_publication_identity_is_step_scoped() {
     'GIT_COMMIT_NAME:[[:space:]]*\$\{\{ github\.repository_owner \}\}' \
     "publication identity name must be step-scoped"
   assert_contains \
-    "${WORKFLOW_DIR}/build-rom.yml" \
-    'git config user\.email "\$\{GIT_COMMIT_EMAIL\}"' \
-    "publication must configure local email from the step environment"
+    "src/ci/publish_ota.sh" \
+    'git config user\.email "\$\{GIT_COMMIT_EMAIL-\}"' \
+    "publication helper must configure local email from the step environment"
   assert_contains \
-    "${WORKFLOW_DIR}/build-rom.yml" \
-    'git config user\.name "\$\{GIT_COMMIT_NAME\}"' \
-    "publication must configure local name from the step environment"
+    "src/ci/publish_ota.sh" \
+    'git config user\.name "\$\{GIT_COMMIT_NAME-\}"' \
+    "publication helper must configure local name from the step environment"
   assert_not_contains \
     "${WORKFLOW_DIR}/build-rom.yml" \
     'git config user\.email .*secrets\.EMAIL' \
