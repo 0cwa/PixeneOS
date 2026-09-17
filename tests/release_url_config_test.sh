@@ -8,6 +8,11 @@ source src/util_functions.sh
 
 set -u
 
+fail() {
+  echo "$*" >&2
+  exit 1
+}
+
 assert_file_contains() {
   local file="${1}"
   local expected="${2}"
@@ -28,6 +33,7 @@ reset_release_config() {
   PIXENEOS_RELEASE_BASE_URL=""
   PIXENEOS_AVBROOT_SETUP_SOURCE=""
   VERSION[GRAPHENEOS]="2026050400"
+  VERSION[AVBROOT_SETUP]="9dde8207020684f2142e720823ad4fdb7c8c4cfb"
   OUTPUTS[PATCHED_OTA]="shiba-2026050400-rootless-abc1234.zip"
 }
 
@@ -149,10 +155,23 @@ test_toml_env_rejects_unknown_and_malformed_keys() {
 }
 
 write_patch_script() {
-  mkdir -p "${WORKDIR}/tools/my-avbroot-setup"
+  mkdir -p "${WORKDIR}/tools/my-avbroot-setup/lib/modules"
   cat >"${WORKDIR}/tools/my-avbroot-setup/patch.py" <<'PY'
 result = generate_update_info(update_info, args.output.name)
 PY
+  cat >"${WORKDIR}/tools/my-avbroot-setup/lib/modules/alterinstaller.py" <<'PY'
+from collections.abc import Iterable
+
+
+def install(sepolicies: Iterable[Path]) -> None:
+    pass
+PY
+  git -c core.hooksPath=/dev/null init -q -- "${WORKDIR}/tools/my-avbroot-setup"
+  git -C "${WORKDIR}/tools/my-avbroot-setup" config user.email test@example.invalid
+  git -C "${WORKDIR}/tools/my-avbroot-setup" config user.name "PixeneOS test"
+  git -C "${WORKDIR}/tools/my-avbroot-setup" add -- patch.py lib/modules/alterinstaller.py
+  git -C "${WORKDIR}/tools/my-avbroot-setup" commit -q -m fixture
+  VERSION[AVBROOT_SETUP]="$(git -C "${WORKDIR}/tools/my-avbroot-setup" rev-parse HEAD)"
 }
 
 test_default_release_url() {
@@ -239,6 +258,78 @@ test_release_base_url_sed_metacharacters() {
   rm -rf "${tmpdir}"
 }
 
+test_my_avbroot_setup_patches_known_alterinstaller_defect() {
+  local tmpdir alterinstaller
+  tmpdir="$(mktemp -d)"
+  WORKDIR="${tmpdir}/work"
+  reset_release_config
+  write_patch_script
+
+  my_avbroot_setup >/dev/null
+  alterinstaller="${WORKDIR}/tools/my-avbroot-setup/lib/modules/alterinstaller.py"
+
+  [[ "$(grep -Fc 'from pathlib import Path' "${alterinstaller}")" -eq 1 ]] ||
+    fail "Expected exactly one Path import in ${alterinstaller}"
+  python3 -m py_compile "${alterinstaller}"
+  python3 - "${alterinstaller}" <<'PY'
+import importlib.util
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("alterinstaller_fixture", path)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+PY
+
+  rm -rf "${tmpdir}"
+}
+
+test_my_avbroot_setup_rejects_unknown_alterinstaller_shape() {
+  local tmpdir alterinstaller status=0
+  tmpdir="$(mktemp -d)"
+  WORKDIR="${tmpdir}/work"
+  reset_release_config
+  write_patch_script
+  alterinstaller="${WORKDIR}/tools/my-avbroot-setup/lib/modules/alterinstaller.py"
+  printf '%s\n' \
+    '# from collections.abc import Iterable' \
+    'marker = "Iterable[Path]"' \
+    'from typing import Iterable' >"${alterinstaller}"
+
+  my_avbroot_setup >/dev/null 2>&1 || status=$?
+
+  [[ "${status}" -ne 0 ]] || fail "Unknown alterinstaller shape was patched"
+  [[ "$(grep -Fc 'from pathlib import Path' "${alterinstaller}")" -eq 0 ]] ||
+    fail "Unknown alterinstaller shape was mutated"
+  assert_file_contains \
+    "${WORKDIR}/tools/my-avbroot-setup/patch.py" \
+    "generate_update_info(update_info, args.output.name)"
+
+  rm -rf "${tmpdir}"
+}
+
+test_my_avbroot_setup_rejects_revision_mismatch() {
+  local tmpdir alterinstaller status=0
+  tmpdir="$(mktemp -d)"
+  WORKDIR="${tmpdir}/work"
+  reset_release_config
+  write_patch_script
+  alterinstaller="${WORKDIR}/tools/my-avbroot-setup/lib/modules/alterinstaller.py"
+  VERSION[AVBROOT_SETUP]="0000000000000000000000000000000000000000"
+
+  my_avbroot_setup >/dev/null 2>&1 || status=$?
+
+  [[ "${status}" -ne 0 ]] || fail "Mismatched alterinstaller revision was accepted"
+  [[ "$(grep -Fc 'from pathlib import Path' "${alterinstaller}")" -eq 0 ]] ||
+    fail "Mismatched revision was mutated"
+  assert_file_contains \
+    "${WORKDIR}/tools/my-avbroot-setup/patch.py" \
+    "generate_update_info(update_info, args.output.name)"
+
+  rm -rf "${tmpdir}"
+}
+
 test_my_avbroot_setup_source_override() {
   reset_release_config
   PIXENEOS_AVBROOT_SETUP_SOURCE="https://example.com/tools/my-avbroot-setup.git"
@@ -273,6 +364,9 @@ test_github_repository_release_url
 test_release_base_url_override
 test_release_base_url_trailing_slash
 test_release_base_url_sed_metacharacters
+test_my_avbroot_setup_patches_known_alterinstaller_defect
+test_my_avbroot_setup_rejects_unknown_alterinstaller_shape
+test_my_avbroot_setup_rejects_revision_mismatch
 test_my_avbroot_setup_source_override
 test_my_avbroot_setup_source_fallback
 test_toml_env_allowlisted_assignments true
