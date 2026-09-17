@@ -5,3 +5,7 @@
 97c0d147a50d0cf5e2714089cd35acd0e205d578:src/util_functions.sh:generic-api-key:40
 # Reviewed public Ed25519 signer key constant; not secret material.
 bd7e2bbcabf114b0c41ac87050327956c3de8c59:src/validate_executable_tool_lock.py:generic-api-key:30
+b5055dbe09a6de320266854db37efcb2c3413fd3:tests/release_existing_build_test.sh:generic-api-key:54
+b5055dbe09a6de320266854db37efcb2c3413fd3:tests/release_existing_build_test.sh:generic-api-key:55
+aa190eabea2bacb740b517132844b6f5bd4a72ed:tests/publication_helper_test.sh:generic-api-key:12
+aa190eabea2bacb740b517132844b6f5bd4a72ed:tests/publication_helper_test.sh:generic-api-key:13
