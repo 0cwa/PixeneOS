@@ -555,11 +555,9 @@ function resolve_release_repository() {
 function my_avbroot_setup() {
   resolve_release_repository
 
-  # Paths
   local helper_root="${WORKDIR}/tools/my-avbroot-setup"
-  local setup_script="${helper_root}/patch.py"
-  local alterinstaller_script="${helper_root}/lib/modules/alterinstaller.py"
-  local magisk_path="${WORKDIR}/modules/magisk.apk"
+  local compatibility_helper="tools/compat/avbroot_setup_compat.py"
+  local helper_source="${PIXENEOS_AVBROOT_SETUP_SOURCE:-${DOMAIN}/0cwa/my-avbroot-setup}"
   local location_path
 
   if [[ -n "${PIXENEOS_RELEASE_BASE_URL}" ]]; then
@@ -568,101 +566,12 @@ function my_avbroot_setup() {
     location_path="${DOMAIN}/${PIXENEOS_RELEASE_OWNER}/${PIXENEOS_RELEASE_REPOSITORY}/releases/download/${VERSION[GRAPHENEOS]}/${OUTPUTS[PATCHED_OTA]}"
   fi
 
-  # Add support to pass env-vars to the setup script for passphrase in the CI/CD pipeline
   echo -e "Running script modifications..."
-
-  # Update location path to use GitHub releases. Use Python's repr() for the
-  # inserted URL so shell/sed metacharacters in user-provided URLs remain data.
-  python3 - "${helper_root}" "${setup_script}" "${alterinstaller_script}" "${location_path}" "${VERSION[AVBROOT_SETUP]}" <<'PY'
-import ast
-import pathlib
-import subprocess
-import sys
-
-helper_root = pathlib.Path(sys.argv[1])
-setup_script = pathlib.Path(sys.argv[2])
-alterinstaller_script = pathlib.Path(sys.argv[3])
-location_path = sys.argv[4]
-pinned_revision = sys.argv[5]
-old = "generate_update_info(update_info, args.output.name)"
-new = f"generate_update_info(update_info, {location_path!r})"
-
-revision = subprocess.run(
-    ["git", "-C", str(helper_root), "rev-parse", "--verify", "HEAD^{commit}"],
-    capture_output=True,
-    text=True,
-    check=False,
-)
-actual_revision = revision.stdout.strip()
-if revision.returncode != 0 or actual_revision != pinned_revision:
-    detail = revision.stderr.strip() or f"resolved {actual_revision or '<none>'}"
-    raise SystemExit(
-        f"my-avbroot-setup checkout does not match pinned revision "
-        f"{pinned_revision}: {detail}"
-    )
-
-text = setup_script.read_text()
-if old not in text:
-    raise SystemExit(f"Expected update-info marker not found in {setup_script}")
-
-# The maintained helper fork imports Iterable from collections.abc and uses
-# Iterable[Path]. Patch only that exact AST shape; refuse unknown source so a
-# future helper change is visible.
-alterinstaller = alterinstaller_script.read_text()
-try:
-    tree = ast.parse(alterinstaller, filename=str(alterinstaller_script))
-except SyntaxError as error:
-    raise SystemExit(f"Could not parse {alterinstaller_script}: {error}") from error
-
-iterable_imports = [
-    node
-    for node in tree.body
-    if isinstance(node, ast.ImportFrom)
-    and node.level == 0
-    and node.module == "collections.abc"
-    and any(alias.name == "Iterable" and alias.asname is None for alias in node.names)
-]
-if len(iterable_imports) != 1:
-    raise SystemExit(
-        f"Expected exactly one collections.abc Iterable import in {alterinstaller_script}"
-    )
-
-has_iterable_path_annotation = any(
-    isinstance(annotation, ast.Subscript)
-    and isinstance(annotation.value, ast.Name)
-    and annotation.value.id == "Iterable"
-    and isinstance(annotation.slice, ast.Name)
-    and annotation.slice.id == "Path"
-    for node in ast.walk(tree)
-    for annotation in (
-        [node.annotation]
-        if isinstance(node, (ast.arg, ast.AnnAssign))
-        else []
-    )
-)
-if not has_iterable_path_annotation:
-    raise SystemExit(
-        f"Expected Iterable[Path] annotation marker not found in {alterinstaller_script}"
-    )
-
-path_imports = [
-    node
-    for node in tree.body
-    if isinstance(node, ast.ImportFrom)
-    and node.level == 0
-    and node.module == "pathlib"
-    and any(alias.name == "Path" and alias.asname is None for alias in node.names)
-]
-if not path_imports:
-    import_line = iterable_imports[0].end_lineno
-    lines = alterinstaller.splitlines(keepends=True)
-    if not lines[import_line - 1].endswith(("\n", "\r")):
-        lines[import_line - 1] += "\n"
-    lines.insert(import_line, "from pathlib import Path\n")
-    alterinstaller_script.write_text("".join(lines))
-
-setup_script.write_text(text.replace(old, new, 1))
-PY
+  python3 "${compatibility_helper}" \
+    --source "${helper_source}" \
+    "${helper_root}" \
+    "${location_path}" \
+    "${VERSION[AVBROOT_SETUP]}"
 }
 
 # Function to setup the environment variables and paths for patching the OTA
@@ -795,6 +704,7 @@ function enable_venv() {
 function url_constructor() {
   local repository="${1}"
   local user='chenxiaolong'
+  local authority=''
   INTERACTIVE_MODE="${2:-true}"
 
   local repository_upper_case=$(echo "${repository}" | tr '[:lower:]' '[:upper:]')
@@ -804,6 +714,22 @@ function url_constructor() {
   if [[ "${repository}" == "my-avbroot-setup" ]]; then
     URL="${PIXENEOS_AVBROOT_SETUP_SOURCE:-${DOMAIN}/0cwa/${repository}}"
     SIGNATURE_URL=""
+    case "${URL}" in
+      git@*:* )
+        [[ "${URL%%@*}" == 'git' ]] || {
+          echo 'Error: authenticated helper repository URLs are not allowed.' >&2
+          return 1
+        }
+        ;;
+      *://*)
+        authority="${URL#*://}"
+        authority="${authority%%/*}"
+        if [[ "${authority}" == *'@'* && "${URL}" != ssh://git@* ]]; then
+          echo 'Error: authenticated helper repository URLs are not allowed.' >&2
+          return 1
+        fi
+        ;;
+    esac
   elif is_locked_executable_tool "${repository}"; then
     echo "Error: executable tools must be acquired from the immutable lock." >&2
     return 1
@@ -818,7 +744,11 @@ function url_constructor() {
     SIGNATURE_URL="${download_page}/${version}/${application}.sig"
   fi
 
-  echo -e "URL for \`${repository}\`: ${URL}"
+  if [[ "${repository}" == 'my-avbroot-setup' ]]; then
+    echo -e "URL for \`${repository}\` configured."
+  else
+    echo -e "URL for \`${repository}\`: ${URL}"
+  fi
 
   # If the script is running in interactive mode, prompt the user to overwrite the existing files
   if [[ "${INTERACTIVE_MODE}" == 'true' ]]; then

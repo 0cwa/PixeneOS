@@ -35,6 +35,10 @@ jobs:
             echo "::notice::ShellCheck is not installed on this runner; skipping ShellCheck."
           fi
 
+      - name: Test avbroot compatibility helper
+        shell: bash
+        run: bash tests/avbroot_setup_compat_test.sh --strict
+
       - name: Run deterministic tests
         shell: bash
         run: |

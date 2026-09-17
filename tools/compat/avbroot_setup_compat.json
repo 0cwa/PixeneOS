@@ -1,0 +1,43 @@
+{
+  "compatibility_version": 1,
+  "repository": "https://github.com/0cwa/my-avbroot-setup",
+  "revision": "9dde8207020684f2142e720823ad4fdb7c8c4cfb",
+  "targets": {
+    "lib/modules/alterinstaller.py": {
+      "sha256": "d5348766828c55c77a1f809f54283fa5eb7699e7d8e4fb00b8732f5175fce472",
+      "replacement": {
+        "kind": "literal",
+        "count": 1,
+        "from": "from collections.abc import Iterable\n",
+        "to": "from collections.abc import Iterable\nfrom pathlib import Path\n"
+      }
+    },
+    "lib/modules/bcr.py": {
+      "sha256": "0df22058e4065b3076fe17b11aa70b7ee22b336357610b400bbf9fffdfad69f0",
+      "replacement": {
+        "kind": "literal",
+        "count": 1,
+        "from": "from collections.abc import Iterable\n",
+        "to": "from collections.abc import Iterable\nfrom pathlib import Path\n"
+      }
+    },
+    "lib/modules/oemunlockonboot.py": {
+      "sha256": "51e0db3ea43d3554cf31eb32b488ca5410519228fbb6eae81e05c65a918114d3",
+      "replacement": {
+        "kind": "literal",
+        "count": 1,
+        "from": "from collections.abc import Iterable\n",
+        "to": "from collections.abc import Iterable\nfrom pathlib import Path\n"
+      }
+    },
+    "patch.py": {
+      "sha256": "522a2900e97ca5f0fb06aebe6a85efc0495bd3fefa2b0a5c9794b939490cfbc5",
+      "replacement": {
+        "kind": "qualified_call_argument",
+        "qualified_name": "external.generate_update_info",
+        "arguments": ["update_info", "args.output.name"],
+        "to": "{release_url!r}"
+      }
+    }
+  }
+}
