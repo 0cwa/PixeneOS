@@ -28,7 +28,7 @@
     },
     {
       "arch": "x86_64-unknown-linux-gnu",
-      "artifact_name": "avbroot-3.31.0-x86_64-unknown-linux-gnu.zip",
+      "artifact_name": "avbroot-3.34.1-x86_64-unknown-linux-gnu.zip",
       "id": "avbroot",
       "layout": [
         {
@@ -41,29 +41,29 @@
         {
           "mode": "0644",
           "path": "README.md",
-          "sha256": "29c520ac9a61f71cd2db30e091ef638a523dc2e87a16f5340763396a20c3c97e",
-          "size": 31744,
+          "sha256": "36f29f6c9142be36a1895ff1f1b8675b9f29f1d2949d9680da8100ed47555d29",
+          "size": 33128,
           "type": "file"
         },
         {
           "mode": "0755",
           "path": "avbroot",
-          "sha256": "7fdfa4a6c8a3145c846faeea1aa49aa407c296710d72744a88e8a8c441e05ea0",
-          "size": 10139408,
+          "sha256": "de0ed1b439175c8c358e2b2de289adc1a8947c655e3cce1598de374ab71d316b",
+          "size": 10931888,
           "type": "file"
         }
       ],
-      "sha256": "59e7992c2a6379d8ee351e423a851ef360a97cd14a37e6b2e57608eb477c3210",
+      "sha256": "b1740ebf92d503cf2e81ca443afa4b615fb97ec365e170b71791ed72d9e559f8",
       "signature": {
         "identity": "chenxiaolong",
         "namespace": "file",
         "signer_fingerprint": "SHA256:Ct0HoRyrFLrnF9W+A/BKEiJmwx7yWkgaW/JvghKrboA",
         "type": "ssh",
-        "url": "https://github.com/chenxiaolong/avbroot/releases/download/v3.31.0/avbroot-3.31.0-x86_64-unknown-linux-gnu.zip.sig"
+        "url": "https://github.com/chenxiaolong/avbroot/releases/download/v3.34.1/avbroot-3.34.1-x86_64-unknown-linux-gnu.zip.sig"
       },
-      "size": 3979155,
-      "url": "https://github.com/chenxiaolong/avbroot/releases/download/v3.31.0/avbroot-3.31.0-x86_64-unknown-linux-gnu.zip",
-      "version": "3.31.0"
+      "size": 4254252,
+      "url": "https://github.com/chenxiaolong/avbroot/releases/download/v3.34.1/avbroot-3.34.1-x86_64-unknown-linux-gnu.zip",
+      "version": "3.34.1"
     },
     {
       "arch": "x86_64-unknown-linux-gnu",

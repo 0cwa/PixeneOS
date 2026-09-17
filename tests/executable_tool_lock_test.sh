@@ -188,16 +188,32 @@ expected = {
         ),
     },
     "avbroot": {
-        "version": "3.31.0",
-        "artifact": "avbroot-3.31.0-x86_64-unknown-linux-gnu.zip",
+        "version": "3.34.1",
+        "artifact": "avbroot-3.34.1-x86_64-unknown-linux-gnu.zip",
+        "archive_size": 4254252,
+        "archive_sha256": "b1740ebf92d503cf2e81ca443afa4b615fb97ec365e170b71791ed72d9e559f8",
         "layout": {
             "LICENSE": "0644",
             "README.md": "0644",
             "avbroot": "0755",
         },
+        "members": {
+            "LICENSE": {
+                "size": 35149,
+                "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+            },
+            "README.md": {
+                "size": 33128,
+                "sha256": "36f29f6c9142be36a1895ff1f1b8675b9f29f1d2949d9680da8100ed47555d29",
+            },
+            "avbroot": {
+                "size": 10931888,
+                "sha256": "de0ed1b439175c8c358e2b2de289adc1a8947c655e3cce1598de374ab71d316b",
+            },
+        },
         "url": (
             "https://github.com/chenxiaolong/avbroot/releases/download/"
-            "v3.31.0/avbroot-3.31.0-x86_64-unknown-linux-gnu.zip"
+            "v3.34.1/avbroot-3.34.1-x86_64-unknown-linux-gnu.zip"
         ),
     },
     "custota-tool": {
@@ -242,6 +258,11 @@ for tool in tools:
         raise SystemExit(f"{tool_id}: wrong architecture")
     if tool["artifact_name"] != pin["artifact"] or tool["url"] != pin["url"]:
         raise SystemExit(f"{tool_id}: wrong canonical artifact identity")
+    if tool_id == "avbroot":
+        if tool["size"] != pin["archive_size"]:
+            raise SystemExit(f"{tool_id}: wrong archive size")
+        if tool["sha256"] != pin["archive_sha256"]:
+            raise SystemExit(f"{tool_id}: wrong archive SHA-256")
     if not isinstance(tool["size"], int) or isinstance(tool["size"], bool) or tool["size"] <= 0:
         raise SystemExit(f"{tool_id}: archive size must be positive")
     if not hash_re.fullmatch(tool["sha256"]):
@@ -280,6 +301,10 @@ for tool in tools:
             raise SystemExit(f"{tool_id}: member size must be positive")
         if not hash_re.fullmatch(member["sha256"]):
             raise SystemExit(f"{tool_id}: member SHA-256 is not canonical")
+        if tool_id == "avbroot":
+            expected_member = pin["members"].get(member["path"])
+            if expected_member is None or member["size"] != expected_member["size"] or member["sha256"] != expected_member["sha256"]:
+                raise SystemExit(f"{tool_id}: wrong locked member integrity for {member['path']}")
     executable = next(member for member in layout if member["path"] == tool_id)
     if executable["mode"] != "0755":
         raise SystemExit(f"{tool_id}: executable mode must be canonical 0755")

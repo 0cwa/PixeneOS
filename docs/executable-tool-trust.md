@@ -26,16 +26,17 @@ entry to name that fingerprint, identity, and namespace.
 ## Recorded release artifacts
 
 The following archive sizes and SHA-256 digests were independently recomputed
-from downloads made on 2026-07-20, except for Custota v6.4, which was checked on
-2026-08-08. They matched the sizes and SHA-256 asset digests exposed by GitHub's
-release API. Each detached signature was exactly 294 bytes and was accepted by
+from downloads made on 2026-07-20 for afsr v1.0.4, on 2026-09-18 for avbroot
+v3.34.1 (published 2026-09-06), and on 2026-08-08 for Custota v6.4. They matched
+the sizes and SHA-256 asset digests exposed by GitHub's release API. Each
+detached signature was exactly 294 bytes and was accepted by
 `ssh-keygen -Y verify` using identity `chenxiaolong` and namespace `file` only
 after the archive digest and size had been checked.
 
 | Tool | Release archive | Bytes | SHA-256 |
 | --- | --- | ---: | --- |
 | afsr 1.0.4 | `afsr-1.0.4-x86_64-unknown-linux-gnu.zip` | 1,548,868 | `8fdbc9aa6c31b4e6530388ffc5adc42652ec6bbd753aef0815d27d8c3a4b9687` |
-| avbroot 3.31.0 | `avbroot-3.31.0-x86_64-unknown-linux-gnu.zip` | 3,979,155 | `59e7992c2a6379d8ee351e423a851ef360a97cd14a37e6b2e57608eb477c3210` |
+| avbroot 3.34.1 | `avbroot-3.34.1-x86_64-unknown-linux-gnu.zip` | 4,254,252 | `b1740ebf92d503cf2e81ca443afa4b615fb97ec365e170b71791ed72d9e559f8` |
 | custota-tool 6.4 | `custota-tool-6.4-x86_64-unknown-linux-gnu.zip` | 2,357,231 | `7d45c0200839f4527b9cdae45ee53bc6579944a85eafb5016fc10e252e120911` |
 
 Detached-signature SHA-256 digests observed during that verification were:
@@ -43,7 +44,7 @@ Detached-signature SHA-256 digests observed during that verification were:
 | Signature | SHA-256 |
 | --- | --- |
 | `afsr-1.0.4-x86_64-unknown-linux-gnu.zip.sig` | `354bd28d0c1cf20a9ca76dfb958451ad17fa1f34f125fec1ddae58fffc315616` |
-| `avbroot-3.31.0-x86_64-unknown-linux-gnu.zip.sig` | `2fb0067d577310b138f542161cc04e0901249c5b661c7f15784822141b8a3437` |
+| `avbroot-3.34.1-x86_64-unknown-linux-gnu.zip.sig` | `b94ed3c697509aa98b0fec55999694ef18a33f1b83a0d82d9d9321632072da01` |
 | `custota-tool-6.4-x86_64-unknown-linux-gnu.zip.sig` | `ecf07da6094f8d9c407a48641badcab88b3f813b1944092469c315a3b34db632` |
 
 GitHub does not publish separate publisher-signed checksum files for these
@@ -54,7 +55,7 @@ the checked-in lock and must not obtain mutable digest policy from the API.
 Official releases:
 
 - [afsr v1.0.4][afsr-release]
-- [avbroot v3.31.0][avbroot-release]
+- [avbroot v3.34.1][avbroot-release]
 - [Custota v6.4][custota-release]
 
 ## Verification and archive inspection
@@ -70,8 +71,8 @@ and non-file/non-directory Unix entry types. The reviewed archives contained:
 | --- | --- | --- | --- | ---: | --- |
 | afsr | `afsr` | file | `0755` | 3,469,744 | `923fa7caaac8b5e3b15b3f0f2e9a08ca34b226cbbcee3f80f40ee5afc735c6d7` |
 | avbroot | `LICENSE` | file | `0644` | 35,149 | `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986` |
-| avbroot | `README.md` | file | `0644` | 31,744 | `29c520ac9a61f71cd2db30e091ef638a523dc2e87a16f5340763396a20c3c97e` |
-| avbroot | `avbroot` | file | `0755` | 10,139,408 | `7fdfa4a6c8a3145c846faeea1aa49aa407c296710d72744a88e8a8c441e05ea0` |
+| avbroot | `README.md` | file | `0644` | 33,128 | `36f29f6c9142be36a1895ff1f1b8675b9f29f1d2949d9680da8100ed47555d29` |
+| avbroot | `avbroot` | file | `0755` | 10,931,888 | `de0ed1b439175c8c358e2b2de289adc1a8947c655e3cce1598de374ab71d316b` |
 | custota-tool | `custota-tool` | file | `0755` | 5,552,592 | `eb3fc5a31a955d74222ec00c7349e9148719a3ccd6b25ede12e24e34030767ee` |
 
 Only after those checks passed were the archives extracted into separate private
@@ -178,5 +179,5 @@ supply-chain gates are closed.
 
 [signing-guide]: https://github.com/chenxiaolong/chenxiaolong/blob/master/VERIFY_SSH_SIGNATURES.md
 [afsr-release]: https://github.com/chenxiaolong/afsr/releases/tag/v1.0.4
-[avbroot-release]: https://github.com/chenxiaolong/avbroot/releases/tag/v3.31.0
+[avbroot-release]: https://github.com/chenxiaolong/avbroot/releases/tag/v3.34.1
 [custota-release]: https://github.com/chenxiaolong/Custota/releases/tag/v6.4
