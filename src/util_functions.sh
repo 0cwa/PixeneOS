@@ -5,6 +5,9 @@
 # This script is a part of the main script and is responsible for the utility functions used in the main script.
 
 source src/declarations.sh
+_util_functions_source_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+source "${_util_functions_source_dir}/config_schema.sh"
+unset _util_functions_source_dir
 source src/exchange.sh
 source src/fetcher.sh
 source src/verifier.sh
@@ -845,9 +848,6 @@ function generate_ota_info() {
   OUTPUTS[PATCHED_OTA]="${DEVICE_NAME}-${VERSION[GRAPHENEOS]}-${flavor}${debug_suffix}-${MODULE_SELECTION_FINGERPRINT}-$(git rev-parse --short HEAD)$(dirty_suffix).zip"
 }
 
-declare -Ag TOML_CONFIG_PRESENT=()
-declare -Ag TOML_CONFIG_VALUES=()
-
 function _toml_trim() {
   local value="${1}"
   value="${value#"${value%%[![:space:]]*}"}"
@@ -891,60 +891,13 @@ function _toml_key_definition() {
   TOML_KEY_CANONICAL=''
   TOML_KEY_TYPE=''
 
-  # These are the only accepted spellings. The bracketed names are retained
-  # because existing env.toml files use them and they are not shell syntax.
-  case "${key}" in
-    DEVICE_NAME) TOML_KEY_CANONICAL=device_name; TOML_KEY_TYPE=string ;;
-    ROM_FAMILY) TOML_KEY_CANONICAL=rom_family; TOML_KEY_TYPE=string ;;
-    INTERACTIVE_MODE) TOML_KEY_CANONICAL=interactive_mode; TOML_KEY_TYPE=boolean ;;
-    OUTPUT_SCOPE) TOML_KEY_CANONICAL=output_scope; TOML_KEY_TYPE=string ;;
-    FORCE_UPDATE) TOML_KEY_CANONICAL=force_update; TOML_KEY_TYPE=boolean ;;
-    ROOT) TOML_KEY_CANONICAL=root; TOML_KEY_TYPE=boolean ;;
-    MAGISK_PREINIT) TOML_KEY_CANONICAL=magisk_preinit; TOML_KEY_TYPE=string ;;
-    'GRAPHENEOS[UPDATE_CHANNEL]') TOML_KEY_CANONICAL=update_channel; TOML_KEY_TYPE=string ;;
-    'MAGISK[REPOSITORY]') TOML_KEY_CANONICAL=magisk_repository; TOML_KEY_TYPE=string ;;
-    'ADDITIONALS[AFSR]') TOML_KEY_CANONICAL=afsr; TOML_KEY_TYPE=boolean ;;
-    'ADDITIONALS[ALTERINSTALLER]') TOML_KEY_CANONICAL=alterinstaller; TOML_KEY_TYPE=boolean ;;
-    'ADDITIONALS[BCR]') TOML_KEY_CANONICAL=bcr; TOML_KEY_TYPE=boolean ;;
-    'ADDITIONALS[CUSTOTA]') TOML_KEY_CANONICAL=custota; TOML_KEY_TYPE=boolean ;;
-    'ADDITIONALS[MSD]') TOML_KEY_CANONICAL=msd; TOML_KEY_TYPE=boolean ;;
-    'ADDITIONALS[OEMUNLOCKONBOOT]') TOML_KEY_CANONICAL=oemunlockonboot; TOML_KEY_TYPE=boolean ;;
-    'ADDITIONALS[BOOT_ANIMATION]') TOML_KEY_CANONICAL=boot_animation; TOML_KEY_TYPE=boolean ;;
-    'ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]')
-      TOML_KEY_CANONICAL=fdroid_privileged_extension
-      TOML_KEY_TYPE=boolean
-      ;;
-    PIXENEOS_RELEASE_OWNER) TOML_KEY_CANONICAL=release_owner; TOML_KEY_TYPE=string ;;
-    PIXENEOS_RELEASE_REPOSITORY) TOML_KEY_CANONICAL=release_repository; TOML_KEY_TYPE=string ;;
-    PIXENEOS_RELEASE_BASE_URL) TOML_KEY_CANONICAL=release_base_url; TOML_KEY_TYPE=string ;;
-    PIXENEOS_AVBROOT_SETUP_SOURCE) TOML_KEY_CANONICAL=setup_source; TOML_KEY_TYPE=string ;;
-    *) return 1 ;;
-  esac
-
-  if [[ "${legacy_mode}" == true ]]; then
-    return 0
-  fi
-
-  case "${section}:${TOML_KEY_CANONICAL}" in
-    device:device_name|device:rom_family|device:update_channel|device:magisk_repository)
-      ;;
-    build:interactive_mode|build:output_scope|build:force_update|build:root|\
-      build:magisk_preinit|build:afsr|build:alterinstaller|build:bcr|\
-      build:custota|build:msd|build:oemunlockonboot|build:boot_animation|\
-      build:fdroid_privileged_extension)
-      ;;
-    github:release_owner|github:release_repository|github:release_base_url|github:setup_source)
-      ;;
-    *)
-      TOML_KEY_CANONICAL=''
-      TOML_KEY_TYPE=''
-      return 1
-      ;;
-  esac
+  config_schema_lookup_key "${section}" "${key}" "${legacy_mode}" || return 1
+  TOML_KEY_CANONICAL="${CONFIG_SCHEMA_CANONICAL}"
+  TOML_KEY_TYPE="${CONFIG_SCHEMA_TYPE[${TOML_KEY_CANONICAL}]}"
 }
 
 function _toml_caller_override_present() {
-  [[ ${DECLARATION_CALLER_PRESENT[${1}]+x} ]]
+  config_schema_caller_present "${1}"
 }
 
 function _toml_apply_value() {
@@ -952,30 +905,7 @@ function _toml_apply_value() {
   local value="${2}"
 
   _toml_caller_override_present "${canonical}" && return 0
-  case "${canonical}" in
-    device_name) DEVICE_NAME="${value}" ;;
-    rom_family) ROM_FAMILY="${value}" ;;
-    interactive_mode) INTERACTIVE_MODE="${value}" ;;
-    output_scope) OUTPUT_SCOPE="${value}" ;;
-    force_update) FORCE_UPDATE="${value}" ;;
-    root) ADDITIONALS[ROOT]="${value}" ;;
-    magisk_preinit) MAGISK[PREINIT]="${value}" ;;
-    update_channel) GRAPHENEOS[UPDATE_CHANNEL]="${value}" ;;
-    magisk_repository) MAGISK[REPOSITORY]="${value}" ;;
-    release_owner) PIXENEOS_RELEASE_OWNER="${value}" ;;
-    release_repository) PIXENEOS_RELEASE_REPOSITORY="${value}" ;;
-    release_base_url) PIXENEOS_RELEASE_BASE_URL="${value}" ;;
-    setup_source) PIXENEOS_AVBROOT_SETUP_SOURCE="${value}" ;;
-    afsr) ADDITIONALS[AFSR]="${value}" ;;
-    alterinstaller) ADDITIONALS[ALTERINSTALLER]="${value}" ;;
-    bcr) ADDITIONALS[BCR]="${value}" ;;
-    custota) ADDITIONALS[CUSTOTA]="${value}" ;;
-    msd) ADDITIONALS[MSD]="${value}" ;;
-    oemunlockonboot) ADDITIONALS[OEMUNLOCKONBOOT]="${value}" ;;
-    boot_animation) ADDITIONALS[BOOT_ANIMATION]="${value}" ;;
-    fdroid_privileged_extension) ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]="${value}" ;;
-    *) return 1 ;;
-  esac
+  config_schema_apply_value "${canonical}" "${value}"
 }
 
 function check_toml_env() {
@@ -1064,16 +994,14 @@ function check_toml_env() {
       return 1
     fi
 
-    if [[ "${type}" == boolean ]]; then
-      [[ "${value}" == true || "${value}" == false ]] || {
+    if ! config_schema_validate_value "${TOML_KEY_CANONICAL}" "${value}"; then
+      if [[ "${type}" == boolean ]]; then
         _toml_fail "configuration value for ${key} must be true or false"
-        return 1
-      }
-    fi
-    [[ "${value}" != *$'\n'* && "${value}" != *$'\r'* ]] || {
-      _toml_fail "configuration value for ${key} contains a newline"
+      else
+        _toml_fail "configuration value for ${key} contains a newline"
+      fi
       return 1
-    }
+    fi
 
     local canonical="${TOML_KEY_CANONICAL}"
     [[ ${TOML_CONFIG_PRESENT[${canonical}]+x} ]] && {
@@ -1095,38 +1023,18 @@ function toml_config_has() {
 }
 
 function toml_resolve_value() {
-  local canonical="${1}"
-  local declaration_default="${2}"
+  local canonical="${1-}"
+  local fallback="${2-}"
 
-  if _toml_caller_override_present "${canonical}"; then
-    case "${canonical}" in
-      device_name) printf '%s' "${DEVICE_NAME}" ;;
-      rom_family) printf '%s' "${ROM_FAMILY}" ;;
-      interactive_mode) printf '%s' "${INTERACTIVE_MODE}" ;;
-      output_scope) printf '%s' "${OUTPUT_SCOPE}" ;;
-      update_channel) printf '%s' "${GRAPHENEOS_UPDATE_CHANNEL}" ;;
-      magisk_preinit) printf '%s' "${MAGISK_PREINIT}" ;;
-      release_owner) printf '%s' "${PIXENEOS_RELEASE_OWNER}" ;;
-      release_repository) printf '%s' "${PIXENEOS_RELEASE_REPOSITORY}" ;;
-      release_base_url) printf '%s' "${PIXENEOS_RELEASE_BASE_URL}" ;;
-      setup_source) printf '%s' "${PIXENEOS_AVBROOT_SETUP_SOURCE}" ;;
-      force_update) printf '%s' "${FORCE_UPDATE}" ;;
-      root) printf '%s' "${ADDITIONALS_ROOT}" ;;
-      afsr) printf '%s' "${ADDITIONALS_AFSR}" ;;
-      alterinstaller) printf '%s' "${ADDITIONALS_ALTERINSTALLER}" ;;
-      bcr) printf '%s' "${ADDITIONALS_BCR}" ;;
-      custota) printf '%s' "${ADDITIONALS_CUSTOTA}" ;;
-      msd) printf '%s' "${ADDITIONALS_MSD}" ;;
-      oemunlockonboot) printf '%s' "${ADDITIONALS_OEMUNLOCKONBOOT}" ;;
-      boot_animation) printf '%s' "${ADDITIONALS_BOOT_ANIMATION}" ;;
-      fdroid_privileged_extension) printf '%s' "${ADDITIONALS_FDROID_PRIVILEGED_EXTENSION}" ;;
-      *) return 1 ;;
-    esac
-  elif toml_config_has "${canonical}"; then
-    printf '%s' "${TOML_CONFIG_VALUES[${canonical}]}"
-  else
-    printf '%s' "${declaration_default}"
+  # Keep the historical public adapter contract: callers may ask for an
+  # unknown key and receive their fallback. Strict schema callers use the
+  # config_schema_* helpers directly and still fail closed for unknown keys.
+  if ! config_schema_key_exists "${canonical}"; then
+    printf '%s' "${fallback}"
+    return 0
   fi
+
+  config_schema_resolve_value "$@"
 }
 
 function supported_tools() {

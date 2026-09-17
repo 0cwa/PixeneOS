@@ -13,31 +13,19 @@ declare -A ROM_PROFILE
 declare -A VERSION
 declare -A DECLARATION_CALLER_PRESENT
 
+_declarations_source_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+source "${_declarations_source_dir}/config_schema.sh"
+unset _declarations_source_dir
+
 if [[ ! ${DECLARATION_CALLER_CAPTURED+x} ]]; then
   # Capture explicitly supplied caller values before declaration defaults are
   # installed. Nested sources include this file again; they must not turn
   # declaration defaults into apparent caller overrides.
-  [[ ${DEVICE_NAME+x} ]] && DECLARATION_CALLER_PRESENT[device_name]=true
-  [[ ${INTERACTIVE_MODE+x} ]] && DECLARATION_CALLER_PRESENT[interactive_mode]=true
-  [[ ${ROM_FAMILY+x} ]] && DECLARATION_CALLER_PRESENT[rom_family]=true
-  [[ ${OUTPUT_SCOPE+x} ]] && DECLARATION_CALLER_PRESENT[output_scope]=true
-  [[ ${GRAPHENEOS_UPDATE_CHANNEL+x} ]] && DECLARATION_CALLER_PRESENT[update_channel]=true
-  [[ ${MAGISK_PREINIT+x} ]] && DECLARATION_CALLER_PRESENT[magisk_preinit]=true
-  [[ ${PIXENEOS_RELEASE_OWNER+x} ]] && DECLARATION_CALLER_PRESENT[release_owner]=true
-  [[ ${PIXENEOS_RELEASE_REPOSITORY+x} ]] && DECLARATION_CALLER_PRESENT[release_repository]=true
-  [[ ${PIXENEOS_RELEASE_BASE_URL+x} ]] && DECLARATION_CALLER_PRESENT[release_base_url]=true
-  [[ ${PIXENEOS_AVBROOT_SETUP_SOURCE+x} ]] && DECLARATION_CALLER_PRESENT[setup_source]=true
-  [[ ${FORCE_UPDATE+x} ]] && DECLARATION_CALLER_PRESENT[force_update]=true
-  [[ ${ADDITIONALS_ROOT+x} ]] && DECLARATION_CALLER_PRESENT[root]=true
-  [[ ${ADDITIONALS_AFSR+x} ]] && DECLARATION_CALLER_PRESENT[afsr]=true
-  [[ ${ADDITIONALS_ALTERINSTALLER+x} ]] && DECLARATION_CALLER_PRESENT[alterinstaller]=true
-  [[ ${ADDITIONALS_BCR+x} ]] && DECLARATION_CALLER_PRESENT[bcr]=true
-  [[ ${ADDITIONALS_CUSTOTA+x} ]] && DECLARATION_CALLER_PRESENT[custota]=true
-  [[ ${ADDITIONALS_MSD+x} ]] && DECLARATION_CALLER_PRESENT[msd]=true
-  [[ ${ADDITIONALS_OEMUNLOCKONBOOT+x} ]] && DECLARATION_CALLER_PRESENT[oemunlockonboot]=true
-  [[ ${ADDITIONALS_BOOT_ANIMATION+x} ]] && DECLARATION_CALLER_PRESENT[boot_animation]=true
-  [[ ${ADDITIONALS_FDROID_PRIVILEGED_EXTENSION+x} ]] &&
-    DECLARATION_CALLER_PRESENT[fdroid_privileged_extension]=true
+  for _canonical in "${CONFIG_SCHEMA_KEYS[@]}"; do
+    config_schema_caller_supplied "${_canonical}" &&
+      DECLARATION_CALLER_PRESENT[${_canonical}]=true
+  done
+  unset _canonical
   DECLARATION_CALLER_CAPTURED=true
 fi
 
@@ -48,10 +36,56 @@ ARCH="x86_64-unknown-linux-gnu" # for Linux
 
 # Initial setup environment variables
 CLEANUP="${CLEANUP:-'false'}"                # Clean up after the script finishes
-DEVICE_NAME="${DEVICE_NAME:-}"               # Device name, passed from the CI environment
-INTERACTIVE_MODE="${INTERACTIVE_MODE:-true}" # Enable interactive mode
-ROM_FAMILY="${ROM_FAMILY:-grapheneos}"
-OUTPUT_SCOPE="${OUTPUT_SCOPE:-local-unpublished}"
+
+function _declarations_apply_schema_defaults() {
+  local canonical destination destination_kind destination_key policy
+  local caller_value current_value default_value
+
+  for canonical in "${CONFIG_SCHEMA_KEYS[@]}"; do
+    policy="${CONFIG_SCHEMA_DECLARATION_POLICY[${canonical}]}"
+    [[ "${policy}" != workflow-owned ]] || continue
+
+    destination="${CONFIG_SCHEMA_SHELL_DESTINATION[${canonical}]}"
+    destination_kind="${CONFIG_SCHEMA_SHELL_DESTINATION_KIND[${canonical}]}"
+    destination_key="${CONFIG_SCHEMA_SHELL_DESTINATION_KEY[${canonical}]}"
+    default_value="$(config_schema_default "${canonical}")"
+    caller_value=''
+    if [[ -n "${CONFIG_SCHEMA_CALLER_DESTINATION[${canonical}]}" ]]; then
+      caller_value="$(config_schema_caller_value "${canonical}")"
+    fi
+
+    case "${destination_kind}:${policy}" in
+      scalar:caller-or-default)
+        if [[ -v "${destination}" ]]; then
+          current_value="${!destination}"
+        else
+          current_value=''
+        fi
+        printf -v "${destination}" '%s' "${current_value:-${default_value}}"
+        ;;
+      array:caller-or-default)
+        local -n destination_ref="${destination}"
+        destination_ref[${destination_key}]="${caller_value:-${default_value}}"
+        ;;
+      array:existing-or-default)
+        local -n destination_ref="${destination}"
+        destination_ref[${destination_key}]="${destination_ref[${destination_key}]:-${default_value}}"
+        ;;
+      array:caller-or-existing-or-default)
+        local -n destination_ref="${destination}"
+        destination_ref[${destination_key}]="${caller_value:-${destination_ref[${destination_key}]:-${default_value}}}"
+        ;;
+      *)
+        echo "Error: unsupported declaration policy for ${canonical}." >&2
+        return 1
+        ;;
+    esac
+  done
+}
+
+_declarations_apply_schema_defaults
+unset -f _declarations_apply_schema_defaults
+
 MODULE_SELECTION_FINGERPRINT="${MODULE_SELECTION_FINGERPRINT:-}"
 ROM_OTA_SHA256="${ROM_OTA_SHA256:-}"
 WORKDIR=".tmp"
@@ -76,8 +110,6 @@ VERSION[MSD]="${VERSION[MSD]:-2.4}"
 VERSION[OEMUNLOCKONBOOT]="${VERSION[OEMUNLOCKONBOOT]:-1.4}"
 
 # Magisk
-MAGISK[PREINIT]="${MAGISK_PREINIT:-}"
-MAGISK[REPOSITORY]="topjohnwu/Magisk"
 MAGISK[URL]="${DOMAIN}/${MAGISK[REPOSITORY]}"
 
 # Keys
@@ -102,22 +134,8 @@ GRAPHENEOS[OTA_TARGET]="${GRAPHENEOS[OTA_TARGET]:-}"
 # Additionals
 
 # Modules
-ADDITIONALS[AFSR]="${ADDITIONALS_AFSR:-${ADDITIONALS[AFSR]:-true}}"   # Android File system repack
-# Spoof Android package manager installer fields
-ADDITIONALS[ALTERINSTALLER]="${ADDITIONALS_ALTERINSTALLER:-${ADDITIONALS[ALTERINSTALLER]:-true}}"
-# Basic Call Recorder
-ADDITIONALS[BCR]="${ADDITIONALS_BCR:-${ADDITIONALS[BCR]:-true}}"
-# Custom OTA Updater app
-ADDITIONALS[CUSTOTA]="${ADDITIONALS_CUSTOTA:-${ADDITIONALS[CUSTOTA]:-true}}"
-# Mass Storage Device on USB
-ADDITIONALS[MSD]="${ADDITIONALS_MSD:-${ADDITIONALS[MSD]:-true}}"
-# Toggle OEM unlock button on boot
-ADDITIONALS[OEMUNLOCKONBOOT]="${ADDITIONALS_OEMUNLOCKONBOOT:-${ADDITIONALS[OEMUNLOCKONBOOT]:-true}}"
-# Optional local boot-animation payload at custom/boot-animation/bootanimation.zip.
-ADDITIONALS[BOOT_ANIMATION]="${ADDITIONALS_BOOT_ANIMATION:-${ADDITIONALS[BOOT_ANIMATION]:-false}}"
-# F-Droid client and Privileged Extension through the locked native adapter.
-# There is intentionally no production lock/profile default yet.
-ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]="${ADDITIONALS_FDROID_PRIVILEGED_EXTENSION:-${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]:-false}}"
+# Directly configurable module defaults are applied from config_schema.sh.
+# F-Droid remains default-off until its lock/profile path has a production policy.
 FDROID_PRIVILEGED_EXTENSION_LOCK="${FDROID_PRIVILEGED_EXTENSION_LOCK:-}"
 FDROID_PRIVILEGED_EXTENSION_PROFILE="${FDROID_PRIVILEGED_EXTENSION_PROFILE:-}"
 FDROID_PRIVILEGED_EXTENSION_CACHE="${FDROID_PRIVILEGED_EXTENSION_CACHE:-}"
