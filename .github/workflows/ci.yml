@@ -46,6 +46,7 @@ jobs:
           bash tests/declarations_config_test.sh
           bash tests/typed_config_resolver_test.sh
           bash tests/helper_preflight_test.sh
+          bash tests/upstream_integration_test.sh
           bash tests/release_url_config_test.sh
           bash tests/release_existing_build_test.sh
           bash tests/phase3_provider_acquisition_test.sh
