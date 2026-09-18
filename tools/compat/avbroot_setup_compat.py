@@ -22,9 +22,6 @@ COMPATIBILITY_VERSION = 1
 DEFAULT_MANIFEST = Path(__file__).with_suffix('.json')
 TARGETS = (
     ('patch.py', 'patch'),
-    ('lib/modules/alterinstaller.py', 'module'),
-    ('lib/modules/bcr.py', 'module'),
-    ('lib/modules/oemunlockonboot.py', 'module'),
 )
 TARGET_PATHS = frozenset(relative for relative, _ in TARGETS)
 SHA256 = re.compile(r'[0-9a-f]{64}\Z')
