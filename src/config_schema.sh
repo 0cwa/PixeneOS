@@ -70,6 +70,8 @@ _config_schema_define force_update FORCE_UPDATE build boolean \
   FORCE_UPDATE scalar '' FORCE_UPDATE '' false workflow-owned
 _config_schema_define root ROOT build boolean \
   ADDITIONALS array ROOT ADDITIONALS_ROOT false true caller-or-default
+_config_schema_define root_mode ROOT_MODE build string \
+  ROOT_MODE scalar '' ROOT_MODE '' false caller-or-default
 _config_schema_define magisk_preinit MAGISK_PREINIT build string \
   MAGISK array PREINIT MAGISK_PREINIT '' true caller-or-default
 _config_schema_define update_channel 'GRAPHENEOS[UPDATE_CHANNEL]' device string \
