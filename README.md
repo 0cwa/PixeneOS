@@ -173,6 +173,8 @@ Root changes the device security model and can introduce compatibility breakage 
 
 PixeneOS defaults to the GrapheneOS-oriented `pixincreate/Magisk` fork. The repository is configurable through `MAGISK[REPOSITORY]` in `env.toml`; use another source only after confirming compatibility with the selected ROM. Magisk/Zygisk behavior can change across releases, so rooted builds should be revalidated after ROM or Magisk updates.
 
+For one build flavor, the existing boolean `ROOT` remains supported (`false` = rootless, `true` = Magisk). `ROOT_MODE` is an optional string override with `rootless`, `magisk`, or `both`. `both` prepares the OTA and shared modules once, then emits the normal rootless and Magisk variants from the same prepared image set. Each output keeps its own module-selection fingerprint, Custota signature, update metadata, and `/rootless/` or `/magisk/` publication pointer.
+
 KernelSU is not integrated by this repository. Adding another root implementation would require an explicit compatibility and signature-verification design rather than treating it as interchangeable with Magisk.
 
 > [!NOTE]
