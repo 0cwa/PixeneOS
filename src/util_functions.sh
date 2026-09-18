@@ -26,6 +26,44 @@ function is_locked_executable_tool() {
   return 1
 }
 
+function resolve_root_mode() {
+  local requested="${ROOT_MODE:-}"
+
+  if [[ -z "${requested}" ]]; then
+    case "${ADDITIONALS[ROOT]}" in
+      true) requested='magisk' ;;
+      false) requested='rootless' ;;
+      *)
+        echo "Error: legacy ROOT selection must be true or false." >&2
+        return 1
+        ;;
+    esac
+  fi
+
+  case "${requested}" in
+    rootless|magisk|both) ;;
+    *)
+      echo "Error: ROOT_MODE must be rootless, magisk, or both." >&2
+      return 1
+      ;;
+  esac
+
+  if [[ "${requested}" == 'magisk' || "${requested}" == 'both' ]]; then
+    if [[ -z "${MAGISK[PREINIT]}" ]]; then
+      echo "Error: Magisk root modes require MAGISK_PREINIT." >&2
+      return 1
+    fi
+  fi
+
+  ROOT_MODE="${requested}"
+  export ROOT_MODE
+}
+
+function root_mode_includes_magisk() {
+  resolve_root_mode >/dev/null || return 1
+  [[ "${ROOT_MODE}" == 'magisk' || "${ROOT_MODE}" == 'both' ]]
+}
+
 # Function to check and download the dependencies
 # This function checks for the required tools and downloads them if not found depending on the configuration done in the declarations file
 function check_and_download_dependencies() {
@@ -102,8 +140,9 @@ function check_and_download_dependencies() {
     done
   done
 
-  # Retry logic for magisk
-  if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
+  # Retry logic for magisk. ROOT_MODE=both downloads it once for the
+  # secondary output while preserving the legacy ROOT boolean path.
+  if root_mode_includes_magisk; then
     RETRY_COUNT=0 # Reset retry count for magisk
     while true; do
       # Magisk is an exception as it is an APK and hence we do the get call directly and verify
@@ -873,21 +912,83 @@ function make_directories() {
   chmod 0700 -- "${WORKDIR}" "${WORKDIR}/.keys" "${WORKDIR}/tools"
 }
 
-function generate_ota_info() {
-  validate_device_name || return 1
+function _generate_ota_variant_info() {
+  local variant="${1}"
+  local original_root="${ADDITIONALS[ROOT]}"
+  local flavor debug_suffix=''
 
-  # Detect build flavor
-  local flavor=$([[ ${ADDITIONALS[ROOT]} == 'true' ]] && echo "magisk-${VERSION[MAGISK]}" || echo "rootless")
-  local debug_suffix=""
+  case "${variant}" in
+    rootless)
+      ADDITIONALS[ROOT]=false
+      flavor='rootless'
+      ;;
+    magisk)
+      ADDITIONALS[ROOT]=true
+      flavor="magisk-${VERSION[MAGISK]}"
+      ;;
+    *)
+      echo "Error: unsupported concrete root variant: ${variant}" >&2
+      return 1
+      ;;
+  esac
 
   if [[ "${ADDITIONALS[DEBUG]}" == 'true' ]]; then
-    debug_suffix="-debug-adb"
+    debug_suffix='-debug-adb'
   fi
 
-  module_selection_fingerprint >/dev/null || return 1
-  # Debug builds are intentionally labeled. The stable selection fingerprint
-  # prevents otherwise identical ROM/profile variants from colliding.
-  OUTPUTS[PATCHED_OTA]="${DEVICE_NAME}-${VERSION[GRAPHENEOS]}-${flavor}${debug_suffix}-${MODULE_SELECTION_FINGERPRINT}-$(git rev-parse --short HEAD)$(dirty_suffix).zip"
+  if ! module_selection_fingerprint >/dev/null; then
+    ADDITIONALS[ROOT]="${original_root}"
+    return 1
+  fi
+
+  VARIANT_SELECTION_FINGERPRINT="${MODULE_SELECTION_FINGERPRINT}"
+  VARIANT_PATCHED_OTA="${DEVICE_NAME}-${VERSION[GRAPHENEOS]}-${flavor}${debug_suffix}-${VARIANT_SELECTION_FINGERPRINT}-$(git rev-parse --short HEAD)$(dirty_suffix).zip"
+  ADDITIONALS[ROOT]="${original_root}"
+}
+
+function generate_ota_info() {
+  validate_device_name || return 1
+  resolve_root_mode || return 1
+
+  OUTPUTS[PATCHED_OTA_ROOTLESS]=''
+  OUTPUTS[PATCHED_OTA_MAGISK]=''
+  OUTPUTS[OTA_METADATA_ROOTLESS]=''
+  OUTPUTS[OTA_METADATA_MAGISK]=''
+  MODULE_SELECTION_FINGERPRINT_ROOTLESS=''
+  MODULE_SELECTION_FINGERPRINT_MAGISK=''
+
+  case "${ROOT_MODE}" in
+    rootless)
+      _generate_ota_variant_info rootless || return 1
+      OUTPUTS[PATCHED_OTA]="${VARIANT_PATCHED_OTA}"
+      OUTPUTS[PATCHED_OTA_ROOTLESS]="${VARIANT_PATCHED_OTA}"
+      MODULE_SELECTION_FINGERPRINT="${VARIANT_SELECTION_FINGERPRINT}"
+      MODULE_SELECTION_FINGERPRINT_ROOTLESS="${VARIANT_SELECTION_FINGERPRINT}"
+      ;;
+    magisk)
+      _generate_ota_variant_info magisk || return 1
+      OUTPUTS[PATCHED_OTA]="${VARIANT_PATCHED_OTA}"
+      OUTPUTS[PATCHED_OTA_MAGISK]="${VARIANT_PATCHED_OTA}"
+      MODULE_SELECTION_FINGERPRINT="${VARIANT_SELECTION_FINGERPRINT}"
+      MODULE_SELECTION_FINGERPRINT_MAGISK="${VARIANT_SELECTION_FINGERPRINT}"
+      ;;
+    both)
+      _generate_ota_variant_info rootless || return 1
+      OUTPUTS[PATCHED_OTA]="${VARIANT_PATCHED_OTA}"
+      OUTPUTS[PATCHED_OTA_ROOTLESS]="${VARIANT_PATCHED_OTA}"
+      MODULE_SELECTION_FINGERPRINT="${VARIANT_SELECTION_FINGERPRINT}"
+      MODULE_SELECTION_FINGERPRINT_ROOTLESS="${VARIANT_SELECTION_FINGERPRINT}"
+
+      _generate_ota_variant_info magisk || return 1
+      OUTPUTS[PATCHED_OTA_MAGISK]="${VARIANT_PATCHED_OTA}"
+      MODULE_SELECTION_FINGERPRINT_MAGISK="${VARIANT_SELECTION_FINGERPRINT}"
+
+      # Keep the legacy singular values bound to the primary/rootless output.
+      MODULE_SELECTION_FINGERPRINT="${MODULE_SELECTION_FINGERPRINT_ROOTLESS}"
+      OUTPUTS[OTA_METADATA_ROOTLESS]="${DEVICE_NAME}-rootless.json"
+      OUTPUTS[OTA_METADATA_MAGISK]="${DEVICE_NAME}-magisk.json"
+      ;;
+  esac
 }
 
 function _toml_trim() {
