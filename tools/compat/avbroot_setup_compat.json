@@ -1,7 +1,7 @@
 {
   "compatibility_version": 1,
   "repository": "https://github.com/0cwa/my-avbroot-setup",
-  "revision": "9dde8207020684f2142e720823ad4fdb7c8c4cfb",
+  "revision": "c7485f053b22dfc0a0c9576a8c5c5c8a6466c853",
   "targets": {
     "lib/modules/alterinstaller.py": {
       "sha256": "d5348766828c55c77a1f809f54283fa5eb7699e7d8e4fb00b8732f5175fce472",
