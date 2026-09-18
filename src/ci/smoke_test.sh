@@ -41,7 +41,8 @@ fi
 }
 echo "ok helper revision: ${VERSION[AVBROOT_SETUP]}"
 
-source src/fetcher.sh
+source src/util_functions.sh
+check_toml_env
 resolve_rom_profile
 get_latest_version
 check_url "rom-ota" "${GRAPHENEOS[OTA_URL]}"
