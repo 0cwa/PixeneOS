@@ -62,7 +62,22 @@ assert_dispatch_default() {
   local actual
   local trigger='workflow_call'
 
-  if grep -Eq '^[[:space:]]{2}workflow_dispatch:[[:space:]]*
+  if grep -Eq '^[[:space:]]{2}workflow_dispatch:[[:space:]]*$' "${file}"; then
+    trigger='workflow_dispatch'
+  fi
+
+  actual="$(awk -v input="${input}" -v trigger="${trigger}" '
+    $0 ~ "^[[:space:]]{2}" trigger ":[[:space:]]*$" { in_trigger = 1; next }
+    in_trigger && $0 ~ "^[[:space:]]{2}[A-Za-z0-9_-]+:[[:space:]]*$" { exit }
+    in_trigger && $0 ~ "^[[:space:]]{6}" input ":[[:space:]]*$" { in_input = 1; next }
+    in_input && $0 ~ "^[[:space:]]{6}[A-Za-z0-9_-]+:[[:space:]]*$" { exit }
+    in_input && $0 ~ "^[[:space:]]+default:[[:space:]]*" {
+      sub(/^.*default:[[:space:]]*/, "")
+      gsub(/[[:space:]\047"]/, "")
+      print
+      exit
+    }
+  ' "${file}")"
 
   [[ "${actual}" == "${expected}" ]] ||
     fail "${file}: ${input} default expected ${expected}, got ${actual:-missing}"
@@ -76,7 +91,29 @@ assert_workflow_input_contract() {
   local actual
   local trigger='workflow_call'
 
-  if grep -Eq '^[[:space:]]{2}workflow_dispatch:[[:space:]]*
+  if grep -Eq '^[[:space:]]{2}workflow_dispatch:[[:space:]]*$' "${file}"; then
+    trigger='workflow_dispatch'
+  fi
+
+  actual="$(awk -v input="${input}" -v trigger="${trigger}" '
+    $0 ~ "^[[:space:]]{2}" trigger ":[[:space:]]*$" { in_trigger = 1; next }
+    in_trigger && $0 ~ "^[[:space:]]{2}[A-Za-z0-9_-]+:[[:space:]]*$" { exit }
+    in_trigger && $0 ~ "^[[:space:]]{6}" input ":[[:space:]]*$" { in_input = 1; next }
+    in_input && $0 ~ "^[[:space:]]{6}[A-Za-z0-9_-]+:[[:space:]]*$" { exit }
+    in_input && $0 ~ "^[[:space:]]+type:[[:space:]]*" {
+      sub(/^.*type:[[:space:]]*/, "")
+      gsub(/[[:space:]\047"]/, "")
+      type = $0
+    }
+    in_input && $0 ~ "^[[:space:]]+default:[[:space:]]*" {
+      sub(/^.*default:[[:space:]]*/, "")
+      gsub(/[[:space:]\047"]/, "")
+      default_value = $0
+    }
+    END {
+      if (type != "" && default_value != "") print type "|" default_value
+    }
+  ' "${file}")"
 
   [[ "${actual}" == "${expected_type}|${expected_default}" ]] ||
     fail "${file}: ${input} input expected ${expected_type}|${expected_default}, got ${actual:-missing}"
