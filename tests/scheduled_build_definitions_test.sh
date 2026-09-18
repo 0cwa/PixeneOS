@@ -53,10 +53,14 @@ grep -Fq 'SCHEDULE_DEFINITION: .github/schedules/grapheneos-shiba.toml' .github/
 grep -Fq 'SCHEDULE_DEFINITION: .github/schedules/lineageos-pdx235.toml' .github/workflows/release-lineage.yml ||
   fail "LineageOS cron does not reference the pdx235 schedule definition"
 
-grep -Fq 'boot-animation: ${{ github.event_name == '''schedule''' && needs.preflight.outputs.boot_animation == '''true''' || inputs.boot-animation || false }}' .github/workflows/release.yml ||
+grep -Fq 'needs.preflight.outputs.boot_animation' .github/workflows/release.yml ||
   fail "GrapheneOS scheduled boot-animation selection is not forwarded from the definition"
-grep -Fq 'boot-animation: ${{ needs.schedule_config.outputs.boot_animation == '''true''' }}' .github/workflows/release-lineage.yml ||
+grep -Fq 'needs.schedule_config.outputs.boot_animation' .github/workflows/release-lineage.yml ||
   fail "LineageOS scheduled boot-animation selection is not forwarded from the definition"
+
+if grep -Eq 'boot-animation:[[:space:]]*true' .github/workflows/release.yml .github/workflows/release-lineage.yml; then
+  fail "Scheduled boot animation must come from the schedule definition, not a hardcoded workflow literal"
+fi
 
 if grep -Eq 'scheduled_build:|schedule_config:' .github/workflows/release-lineage.yml; then
   :
