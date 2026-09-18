@@ -38,7 +38,8 @@ fail() {
 
   generate_ota_info
 
-  [[ "${ROOT_MODE}" == both ]] || fail "ROOT_MODE=both was not preserved"
+  [[ "${ROOT_MODE}" == both ]] || fail "ROOT_MODE request was not preserved"
+  [[ "${RESOLVED_ROOT_MODE}" == both ]] || fail "ROOT_MODE=both did not resolve to both"
   [[ "${ADDITIONALS[ROOT]}" == false ]] ||
     fail "dual identity generation did not restore legacy ROOT state"
   [[ "${MODULE_SELECTION_FINGERPRINT_ROOTLESS}" == "$(printf 'a%.0s' {1..64})" ]] ||
@@ -65,7 +66,8 @@ fail() {
   export ROOT_MODE=''
   source src/util_functions.sh
   resolve_root_mode
-  [[ "${ROOT_MODE}" == magisk ]] ||
+  [[ -z "${ROOT_MODE}" ]] || fail "legacy ROOT=true unexpectedly mutated ROOT_MODE"
+  [[ "${RESOLVED_ROOT_MODE}" == magisk ]] ||
     fail "legacy ROOT=true did not resolve to magisk"
 )
 
@@ -75,7 +77,8 @@ fail() {
   export ROOT_MODE=''
   source src/util_functions.sh
   resolve_root_mode
-  [[ "${ROOT_MODE}" == rootless ]] ||
+  [[ -z "${ROOT_MODE}" ]] || fail "legacy ROOT=false unexpectedly mutated ROOT_MODE"
+  [[ "${RESOLVED_ROOT_MODE}" == rootless ]] ||
     fail "legacy ROOT=false did not resolve to rootless"
 )
 
