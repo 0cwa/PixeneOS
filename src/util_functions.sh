@@ -951,7 +951,7 @@ function _toml_apply_value() {
 }
 
 function check_toml_env() {
-  local toml_file='env.toml'
+  local toml_file="${1:-env.toml}"
   local line section='' raw_key raw_value key value type
   local legacy_mode=true seen_section=false
   declare -A seen_sections=()
