@@ -37,9 +37,9 @@ run_gitleaks() {
   fi
 
   if [[ "${mode}" == "staged" ]]; then
-    gitleaks protect --staged --redact --config "${config}"
+    gitleaks git --staged --redact --config "${config}" .
   else
-    gitleaks detect --source . --redact --config "${config}"
+    gitleaks git --redact --config "${config}" .
   fi
 }
 
@@ -70,8 +70,8 @@ is_sensitive_path() {
 check_content_file() {
   local path="$1"
   local file="$2"
-  local base64_secret_regex=$'\\b(KEYS_AVB_BASE64|KEYS_CERT_OTA_BASE64|KEYS_OTA_BASE64|AVB_KEY|CERT_OTA|OTA_KEY)\\b[[:space:]]*[:=][[:space:]]*["\\\']?[A-Za-z0-9+/]{40,}={0,2}'
-  local passphrase_regex=$'\\b(PASSPHRASE_AVB|PASSPHRASE_OTA)\\b[[:space:]]*[:=][[:space:]]*["\\\']?[^$[:space:]"\\\'][^[:space:]"\\\']{7,}'
+  local base64_secret_regex=$'\\b(KEYS_AVB_BASE64|KEYS_CERT_OTA_BASE64|KEYS_OTA_BASE64|AVB_KEY|CERT_OTA|OTA_KEY)\\b[[:blank:]]*[:=][[:blank:]]*["\\\']?[A-Za-z0-9+/]{40,}={0,2}'
+  local passphrase_regex=$'\\b(PASSPHRASE_AVB|PASSPHRASE_OTA)\\b[[:blank:]]*[:=][[:blank:]]*["\\\']?[^$[:space:]"\\\'][^[:space:]"\\\']{7,}'
 
   if grep -IEq -- '-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----' "${file}"; then
     record_failure "${path}" "contains a private-key PEM marker"

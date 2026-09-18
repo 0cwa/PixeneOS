@@ -5,10 +5,26 @@
 # This script is a part of the main script and is responsible for the utility functions used in the main script.
 
 source src/declarations.sh
+_util_functions_source_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+source "${_util_functions_source_dir}/config_schema.sh"
+unset _util_functions_source_dir
 source src/exchange.sh
 source src/fetcher.sh
 source src/verifier.sh
 source src/debug_module_setup.sh
+source src/rom_profiles.sh
+
+declare -a LOCKED_EXECUTABLE_TOOLS=(avbroot afsr custota-tool)
+
+function is_locked_executable_tool() {
+  local candidate="${1}"
+  local locked_tool
+
+  for locked_tool in "${LOCKED_EXECUTABLE_TOOLS[@]}"; do
+    [[ "${candidate}" == "${locked_tool}" ]] && return 0
+  done
+  return 1
+}
 
 # Function to check and download the dependencies
 # This function checks for the required tools and downloads them if not found depending on the configuration done in the declarations file
@@ -36,8 +52,31 @@ function check_and_download_dependencies() {
   # Convert the space-separated string back into an array
   IFS=' ' read -r -a tools_array <<<"${tools}"
 
+  local -a executable_tools=()
+  local tool flag
   for tool in "${tools_array[@]}"; do
-    local flag=$(flag_check "${tool}")
+    flag="$(flag_check "${tool}")"
+
+    if is_locked_executable_tool "${tool}"; then
+      if [[ "${flag}" == "true" ]]; then
+        executable_tools+=("${tool}")
+      fi
+      continue
+    fi
+
+  done
+
+  # Authenticate the complete executable set before extracting any executable.
+  if ((${#executable_tools[@]})); then
+    bootstrap_executable_tools "${executable_tools[@]}" || return 1
+  fi
+
+  for tool in "${tools_array[@]}"; do
+    flag="$(flag_check "${tool}")"
+
+    if is_locked_executable_tool "${tool}"; then
+      continue
+    fi
 
     if [[ "${flag}" == 'false' ]]; then
       echo -e "\`${tool}\` is **NOT** enabled in the configuration.\nSkipping...\n"
@@ -78,6 +117,34 @@ function check_and_download_dependencies() {
   fi
 }
 
+function bootstrap_executable_tools() {
+  local -a selected=("$@")
+  local report="${WORKDIR}/reports/executable-tools.json"
+
+  python3 "$(git rev-parse --show-toplevel)/src/bootstrap_executable_tools.py" \
+    --workdir "${WORKDIR}" \
+    install \
+    --report "${report}" \
+    "${selected[@]}"
+}
+
+function resolve_executable_tool() {
+  local tool="${1}"
+
+  python3 "$(git rev-parse --show-toplevel)/src/bootstrap_executable_tools.py" \
+    --workdir "${WORKDIR}" \
+    resolve "${tool}"
+}
+
+function run_executable_tool() {
+  local tool="${1}"
+  shift
+
+  python3 "$(git rev-parse --show-toplevel)/src/bootstrap_executable_tools.py" \
+    --workdir "${WORKDIR}" \
+    run "${tool}" -- "$@"
+}
+
 # Function to check the flag status
 # If flag for a tool is disabled, it is not downloaded
 function flag_check() {
@@ -99,6 +166,168 @@ function flag_check() {
   fi
 }
 
+# Append enabled my-avbroot-setup modules while preserving the historical
+# argument order: all module archives first, followed by their signatures.
+function append_enabled_module_arguments() {
+  local args_name="${1}"
+  local -n args_ref="${args_name}"
+  local entry module flag
+  local -a enabled_modules=()
+  local -a module_entries=(
+    "custota:CUSTOTA"
+    "msd:MSD"
+    "bcr:BCR"
+    "oemunlockonboot:OEMUNLOCKONBOOT"
+    "alterinstaller:ALTERINSTALLER"
+    "boot-animation:BOOT_ANIMATION"
+  )
+
+  for entry in "${module_entries[@]}"; do
+    module="${entry%%:*}"
+    flag="${entry#*:}"
+
+    if [[ "${ADDITIONALS[${flag}]}" == 'true' ]]; then
+      enabled_modules+=("${module}")
+    fi
+  done
+
+  for module in "${enabled_modules[@]}"; do
+    args_ref+=("--module-${module}" "${WORKDIR}/modules/${module}.zip")
+  done
+
+  for module in "${enabled_modules[@]}"; do
+    args_ref+=("--module-${module}-sig" "${WORKDIR}/signatures/${module}.zip.sig")
+  done
+}
+
+# Validate and register the optional local boot-animation module before any
+# patch command runs. The helper's Module/ModuleRequirements API is the same
+# API used by src/debugmod.py at the pinned helper revision.
+function prepare_boot_animation_module() {
+  local helper_root="${1}"
+  local repository_root payload_path init_file registry_file module_source
+  repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)" || return 1
+  payload_path="${repository_root}/custom/boot-animation/bootanimation.zip"
+
+  if [[ "${ADDITIONALS[BOOT_ANIMATION]}" != 'true' ]]; then
+    return 0
+  fi
+
+  if ! python3 src/boot_animation.py validate "${payload_path}" >/dev/null; then
+    echo "Error: boot animation validation failed; refusing to patch." >&2
+    return 1
+  fi
+
+  init_file="${helper_root}/lib/modules/__init__.py"
+  registry_file="${helper_root}/lib/modules/registry.py"
+  module_source="${helper_root}/lib/modules/boot_animation.py"
+  if [[ ! -f "${init_file}" || -L "${init_file}" ]]; then
+    echo "Error: pinned patch helper lacks its module registry." >&2
+    return 1
+  fi
+  if [[ ! -d "${helper_root}/lib/modules" || -L "${helper_root}/lib/modules" ]]; then
+    echo "Error: pinned patch helper has no safe module directory." >&2
+    return 1
+  fi
+  if [[ ! -f "${registry_file}" || -L "${registry_file}" ]]; then
+    echo "Error: pinned patch helper lacks its legacy module registry." >&2
+    return 1
+  fi
+  if [[ -L "${module_source}" ]]; then
+    echo "Error: pinned patch helper has an unsafe boot-animation module path." >&2
+    return 1
+  fi
+
+  cp -- src/boot_animation.py "${module_source}" || return 1
+  if ! grep -Fq 'def all_modules' "${init_file}" ||
+    ! grep -Fq 'legacy_cli_module_types' "${init_file}" ||
+    ! grep -Fq 'def legacy_cli_module_types' "${registry_file}" ||
+    ! grep -Fq 'result: list[type[LegacyCliModule]] = []' "${registry_file}" ||
+    ! grep -Fq '    return tuple(result)' "${registry_file}"; then
+    echo "Error: unsupported pinned helper module registry API." >&2
+    return 1
+  fi
+
+  if ! grep -Fq 'from lib.modules.boot_animation import BootAnimationMod' "${registry_file}"; then
+    awk '/^    result: list\[type\[LegacyCliModule\]\] = \[\]$/ {
+      print
+      print "    from lib.modules.boot_animation import BootAnimationMod"
+      next
+    }
+    {print}' "${registry_file}" >"${registry_file}.tmp" || return 1
+    mv -- "${registry_file}.tmp" "${registry_file}" || return 1
+  fi
+  if ! grep -Fq '    result.append(BootAnimationMod)' "${registry_file}"; then
+    awk '/^    return tuple\(result\)$/ {
+      print "    result.append(BootAnimationMod)"
+      print
+      next
+    }
+    {print}' "${registry_file}" >"${registry_file}.tmp" || return 1
+    mv -- "${registry_file}.tmp" "${registry_file}" || return 1
+  fi
+
+  mkdir -p -- "${WORKDIR}/modules" "${WORKDIR}/signatures" || return 1
+  : >"${WORKDIR}/modules/boot-animation.zip"
+  : >"${WORKDIR}/signatures/boot-animation.zip.sig"
+  export PIXENEOS_BOOT_ANIMATION_PATH="${payload_path}"
+}
+
+# Resolve and acquire the locked F-Droid inputs before exposing them to the
+# patch command. Artifact URLs and versions belong exclusively to the lock.
+function prepare_fdroid_privileged_extension() {
+  local args_name="${1}"
+  local helper_root="${2}"
+  local -n args_ref="${args_name}"
+  local lock_path="${FDROID_PRIVILEGED_EXTENSION_LOCK}"
+  local profile_path="${FDROID_PRIVILEGED_EXTENSION_PROFILE}"
+  local cache_path="${FDROID_PRIVILEGED_EXTENSION_CACHE:-${WORKDIR}/locked-artifacts}"
+  local report_path="${FDROID_PRIVILEGED_EXTENSION_PATCH_REPORT:-${OUTPUTS[PATCHED_OTA]}.patch-report.json}"
+  local module_tool="${helper_root}/module-tool.py"
+
+  if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" != 'true' ]]; then
+    return 0
+  fi
+
+  if ! verify_fdroid_privileged_extension_inputs \
+    "${lock_path}" "${profile_path}"; then
+    return 1
+  fi
+  if [[ ! -f "${module_tool}" || -L "${module_tool}" ]]; then
+    echo "Error: the pinned patch helper lacks the locked module tool." >&2
+    return 1
+  fi
+
+  if ! python "${module_tool}" resolve \
+    --profile "${profile_path}" \
+    --lock "${lock_path}" \
+    --format json >/dev/null; then
+    echo "Error: F-Droid locked profile resolution failed." >&2
+    return 1
+  fi
+  if ! python "${module_tool}" artifacts fetch \
+    --lock "${lock_path}" \
+    --cache "${cache_path}" \
+    --module fdroid-privileged-extension >/dev/null; then
+    echo "Error: F-Droid locked artifact fetch failed." >&2
+    return 1
+  fi
+  if ! python "${module_tool}" artifacts verify \
+    --lock "${lock_path}" \
+    --cache "${cache_path}" \
+    --module fdroid-privileged-extension >/dev/null; then
+    echo "Error: F-Droid locked artifact verification failed." >&2
+    return 1
+  fi
+
+  args_ref+=(
+    "--module-lock" "${lock_path}"
+    "--module-profile" "${profile_path}"
+    "--module-cache" "${cache_path}"
+    "--patch-report" "${report_path}"
+  )
+}
+
 # Function to create and make the release called by main script
 function create_and_make_release() {
   if [[ ! -d $WORKDIR ]]; then
@@ -108,8 +337,11 @@ function create_and_make_release() {
     check_and_download_dependencies
   fi
 
+  # Reject a stale or unexpected helper checkout before downloading a large OTA.
+  helper_repository_preflight || return 1
+
   # Calls the download_ota function to download the OTA if not found
-  download_ota
+  download_ota || return 1
   # Calls the create_ota function to create the OTA
   create_ota
 }
@@ -118,9 +350,12 @@ function create_ota() {
   [[ "${CLEANUP}" != 'true' ]] && trap cleanup EXIT ERR
 
   # Generate output file names
-  generate_ota_info
-  # Setup environment variables and paths
-  env_setup
+  generate_ota_info || return 1
+  # Setup environment variables, apply the pinned compatibility transform, and
+  # install the helper's Python dependencies.
+  env_setup || return 1
+  # Smoke-test the transformed helper before touching the OTA.
+  helper_contract_preflight || return 1
   # Patch OTA with avbroot and afsr by leveraging my-avbroot-setup
   patch_ota
 }
@@ -163,16 +398,18 @@ function generate_keys() {
     "$(dirname "${KEYS[PKMD]}")"
 
   # Generate the AVB and OTA signing keys
-  avbroot key generate-key -o "${KEYS[AVB]}"
-  avbroot key generate-key -o "${KEYS[OTA]}"
+  run_executable_tool avbroot key generate-key -o "${KEYS[AVB]}" || return 1
+  run_executable_tool avbroot key generate-key -o "${KEYS[OTA]}" || return 1
 
   # Convert the public key portion of the AVB signing key to the AVB public key metadata format
   # This is the format that the bootloader requires when setting the custom root of trust
-  avbroot key extract-avb -k "${KEYS[AVB]}" -o "${KEYS[PKMD]}"
+  run_executable_tool avbroot key extract-avb \
+    -k "${KEYS[AVB]}" -o "${KEYS[PKMD]}" || return 1
 
   # Generate a self-signed certificate for the OTA signing key
   # This is used by recovery to verify OTA updates when sideloading
-  avbroot key generate-cert -k "${KEYS[OTA]}" -o "${KEYS[CERT_OTA]}"
+  run_executable_tool avbroot key generate-cert \
+    -k "${KEYS[OTA]}" -o "${KEYS[CERT_OTA]}" || return 1
 
   # Convert the keys to base64 which can be used in CI/CD pipeline environment
   base64_encode
@@ -182,6 +419,10 @@ function generate_keys() {
 # Leverages `my-avbroot-setup` to patch the OTA
 # This function does a lot of things before patching the OTA
 function patch_ota() {
+  if [[ -z "${ROM_PROFILE[PROVIDER]:-}" ]]; then
+    resolve_rom_profile || return 1
+  fi
+
   if [[ "${INTERACTIVE_MODE}" != 'true' ]]; then
     base64_decode
   fi
@@ -193,10 +434,21 @@ function patch_ota() {
   local grapheneos_otacert="${WORKDIR}/extracted/ota/META-INF/com/android/otacert"
   local magisk_path="${WORKDIR}/modules/magisk.apk"
   local my_avbroot_setup="${WORKDIR}/tools/my-avbroot-setup"
+  local -a locked_module_args=()
 
   # Activate the virtual environment
-  if [ -z "${VIRTUAL_ENV}" ]; then
-    enable_venv
+  if [ -z "${VIRTUAL_ENV:-}" ]; then
+    enable_venv || return 1
+  fi
+
+  # Locked module artifacts must be resolved, fetched, and verified before any
+  # OTA contents are unpacked. Keep the disabled path on its legacy ordering.
+  if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' ]]; then
+    rm -rf -- "${WORKDIR}/extracted/extracts/"
+    if ! prepare_fdroid_privileged_extension \
+      locked_module_args "${my_avbroot_setup}"; then
+      return 1
+    fi
   fi
 
   # Extract the official public keys and certificates if not found
@@ -205,10 +457,11 @@ function patch_ota() {
     extract_official_keys
   fi
 
-  # At present, the script lacks the ability to disable certain modules.
-  # Everything is hardcoded to be enabled by default.
-  if ls "${ota_zip}.patched*.zip" 1>/dev/null 2>&1; then
-    echo -e "File ${ota_zip}.pathed.zip already exists in local. Patch skipped."
+  # Legacy output markers do not encode a locked module selection. Never reuse
+  # one for an enabled F-Droid build.
+  if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" != 'true' ]] &&
+    [[ -f "${OUTPUTS[PATCHED_OTA]}" ]]; then
+    echo -e "File ${OUTPUTS[PATCHED_OTA]} already exists locally. Patch skipped."
   else
     echo -e "Patching OTA..."
     local args=()
@@ -230,19 +483,28 @@ function patch_ota() {
     args+=("--pass-avb-env-var" "PASSPHRASE_AVB")
     args+=("--pass-ota-env-var" "PASSPHRASE_OTA")
 
-    # Modules
-    args+=("--module-custota" "${WORKDIR}/modules/custota.zip")
-    args+=("--module-msd" "${WORKDIR}/modules/msd.zip")
-    args+=("--module-bcr" "${WORKDIR}/modules/bcr.zip")
-    args+=("--module-oemunlockonboot" "${WORKDIR}/modules/oemunlockonboot.zip")
-    args+=("--module-alterinstaller" "${WORKDIR}/modules/alterinstaller.zip")
+    # Preserve the legacy cleanup ordering when locked modules are disabled.
+    # Enabled builds already cleared this tree before locked acquisition so a
+    # caller-selected cache below it remains available to patch.py.
+    if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" != 'true' ]]; then
+      rm -rf -- "${WORKDIR}/extracted/extracts/"
+    fi
 
-    # Module signatures
-    args+=("--module-custota-sig" "${WORKDIR}/signatures/custota.zip.sig")
-    args+=("--module-msd-sig" "${WORKDIR}/signatures/msd.zip.sig")
-    args+=("--module-bcr-sig" "${WORKDIR}/signatures/bcr.zip.sig")
-    args+=("--module-oemunlockonboot-sig" "${WORKDIR}/signatures/oemunlockonboot.zip.sig")
-    args+=("--module-alterinstaller-sig" "${WORKDIR}/signatures/alterinstaller.zip.sig")
+    # Modules and their signatures
+    if [[ "${ADDITIONALS[BOOT_ANIMATION]}" == 'true' ]] &&
+      ! prepare_boot_animation_module "${my_avbroot_setup}"; then
+      return 1
+    fi
+    append_enabled_module_arguments args
+    if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' ]]; then
+      args+=("${locked_module_args[@]}")
+    elif ! prepare_fdroid_privileged_extension args "${my_avbroot_setup}"; then
+      return 1
+    fi
+
+    if [[ "${ROM_PROFILE[CLEAR_VBMETA_FLAGS]}" == 'true' ]]; then
+      args+=("--patch-arg=--clear-vbmeta-flags")
+    fi
 
     # Add debug module if unauthorized ADB is enabled
     if [[ "${ADDITIONALS[DEBUG]}" == 'true' ]]; then
@@ -271,12 +533,9 @@ function patch_ota() {
       args+=("--patch-arg=--rootless")
       echo -e "Magisk is not enabled. Skipping...\n"
     fi
-    
-    # Have to clear storage space because, `csig` results in storage runout
-    rm -rf ${WORKDIR}/extracted/extracts/
 
     # Python command to run the patch script
-    python ${my_avbroot_setup}/patch.py "${args[@]}"
+    python "${my_avbroot_setup}/patch.py" "${args[@]}" || return 1
   fi
 
   # Deactivate the virtual environment after patching the OTA
@@ -302,9 +561,9 @@ function resolve_release_repository() {
 function my_avbroot_setup() {
   resolve_release_repository
 
-  # Paths
-  local setup_script="${WORKDIR}/tools/my-avbroot-setup/patch.py"
-  local magisk_path="${WORKDIR}/modules/magisk.apk"
+  local helper_root="${WORKDIR}/tools/my-avbroot-setup"
+  local compatibility_helper="tools/compat/avbroot_setup_compat.py"
+  local helper_source="${PIXENEOS_AVBROOT_SETUP_SOURCE:-${DOMAIN}/0cwa/my-avbroot-setup}"
   local location_path
 
   if [[ -n "${PIXENEOS_RELEASE_BASE_URL}" ]]; then
@@ -313,65 +572,127 @@ function my_avbroot_setup() {
     location_path="${DOMAIN}/${PIXENEOS_RELEASE_OWNER}/${PIXENEOS_RELEASE_REPOSITORY}/releases/download/${VERSION[GRAPHENEOS]}/${OUTPUTS[PATCHED_OTA]}"
   fi
 
-  # Add support to pass env-vars to the setup script for passphrase in the CI/CD pipeline
   echo -e "Running script modifications..."
+  python3 "${compatibility_helper}" \
+    --source "${helper_source}" \
+    "${helper_root}" \
+    "${location_path}" \
+    "${VERSION[AVBROOT_SETUP]}"
+}
 
-  # Update location path to use GitHub releases. Use Python's repr() for the
-  # inserted URL so shell/sed metacharacters in user-provided URLs remain data.
-  python3 - "${setup_script}" "${location_path}" <<'PY'
-import pathlib
-import sys
+# Fail early when the helper checkout is not the exact revision PixeneOS pins.
+# The compatibility transformer performs the stronger origin/status/source-shape
+# validation later; this cheap check intentionally runs before OTA acquisition.
+function helper_repository_preflight() {
+  local helper_root="${WORKDIR}/tools/my-avbroot-setup"
+  local actual
 
-setup_script = pathlib.Path(sys.argv[1])
-location_path = sys.argv[2]
-old = "generate_update_info(update_info, args.output.name)"
-new = f"generate_update_info(update_info, {location_path!r})"
+  actual="$(git -C "${helper_root}" rev-parse --verify 'HEAD^{commit}' 2>/dev/null)" || {
+    echo "Error: helper repository is missing or has no commit: ${helper_root}" >&2
+    return 1
+  }
 
-text = setup_script.read_text()
-if old not in text:
-    raise SystemExit(f"Expected update-info marker not found in {setup_script}")
+  if [[ "${actual}" != "${VERSION[AVBROOT_SETUP]}" ]]; then
+    echo "Error: helper contract mismatch: expected ${VERSION[AVBROOT_SETUP]}, got ${actual}" >&2
+    return 1
+  fi
+}
 
-setup_script.write_text(text.replace(old, new, 1))
-PY
+# Run after env_setup: by this point the fail-closed compatibility transform and
+# pyproject dependencies are in place, so --help exercises the effective helper.
+function helper_contract_preflight() {
+  local helper_root="${WORKDIR}/tools/my-avbroot-setup"
+
+  if ! python "${helper_root}/patch.py" --help >/dev/null 2>&1; then
+    echo "Error: helper patch.py contract smoke check failed" >&2
+    return 1
+  fi
 }
 
 # Function to setup the environment variables and paths for patching the OTA
 function env_setup() {
-  # Set up `my-avbroot-setup` environment
-  my_avbroot_setup
-
-  # Paths
-  local avbroot="${WORKDIR}/tools/avbroot"
-  local afsr="${WORKDIR}/tools/afsr"
-  local custota_tool="${WORKDIR}/tools/custota-tool"
   local my_avbroot_setup="${WORKDIR}/tools/my-avbroot-setup"
-  local requirements_file="${my_avbroot_setup}/requirements.txt"
+  local pyproject_file="${my_avbroot_setup}/pyproject.toml"
+  local tool flag executable variable path_prefix
+  local -a selected_tools=()
+  local -a resolved_executables=()
+  local -a executable_directories=()
 
-  # Add the paths to the PATH environment variable just so that the script can find them
-  if ! command -v avbroot &>/dev/null && ! command -v afsr &>/dev/null && ! command -v custota-tool &>/dev/null; then
-    export PATH="$(realpath ${afsr}):$(realpath ${avbroot}):$(realpath ${custota_tool}):$PATH"
+  # Restore the caller PATH from the last successful setup before resolving a
+  # new selection. Only the exact prefix injected by this function is removed.
+  unset PIXENEOS_AVBROOT_BIN PIXENEOS_AFSR_BIN PIXENEOS_CUSTOTA_TOOL_BIN
+  if [[ -n "${PIXENEOS_EXECUTABLE_PATH_PREFIX:-}" ]]; then
+    if [[ "${PATH}" == "${PIXENEOS_EXECUTABLE_PATH_PREFIX}" ]]; then
+      PATH=""
+    elif [[ "${PATH}" == "${PIXENEOS_EXECUTABLE_PATH_PREFIX}:"* ]]; then
+      PATH="${PATH#"${PIXENEOS_EXECUTABLE_PATH_PREFIX}:"}"
+    elif [[ -n "${PIXENEOS_EXECUTABLE_BASE_PATH+x}" ]]; then
+      PATH="${PIXENEOS_EXECUTABLE_BASE_PATH}"
+      export PATH
+      unset PIXENEOS_EXECUTABLE_PATH_PREFIX PIXENEOS_EXECUTABLE_BASE_PATH
+      echo "Error: executable PATH prefix changed after setup." >&2
+      return 1
+    else
+      unset PIXENEOS_EXECUTABLE_PATH_PREFIX
+      echo "Error: executable PATH tracking is incomplete." >&2
+      return 1
+    fi
+    export PATH
   fi
+  unset PIXENEOS_EXECUTABLE_PATH_PREFIX PIXENEOS_EXECUTABLE_BASE_PATH
+
+  # Resolve the complete enabled set before modifying helper source, activating
+  # an environment, or exposing any executable binding.
+  for tool in "${LOCKED_EXECUTABLE_TOOLS[@]}"; do
+    flag="$(flag_check "${tool}")"
+    if [[ "${flag}" != "true" ]]; then
+      continue
+    fi
+    executable="$(resolve_executable_tool "${tool}")" || return 1
+    selected_tools+=("${tool}")
+    resolved_executables+=("${executable}")
+  done
+
+  # Set up `my-avbroot-setup` only after every enabled executable resolved.
+  my_avbroot_setup || return 1
 
   # Enabled python virtual environment
-  enable_venv
+  enable_venv || return 1
 
-  # Install required Python packages
-  if [[ -f "${requirements_file}" ]]; then
-    local missing_packages=false
-    while read -r package; do
-      [[ -z "${package}" ]] && continue
-      if ! pip list | grep -i "^${package%%[=><]*}" &>/dev/null; then
-        missing_packages=true
-        break
-      fi
-    done <"${requirements_file}"
-
-    if [[ "${missing_packages}" == "true" ]]; then
-      echo -e "Installing required Python packages from requirements.txt..."
-      pip3 install -r "${requirements_file}"
+  # Install required Python packages from the maintained helper's pyproject.
+  if [[ -f "${pyproject_file}" ]]; then
+    if ! command -v uv &>/dev/null; then
+      echo -e "uv not found. Installing..."
+      python3 -m pip install uv || return 1
     fi
+
+    echo -e "Installing required Python packages from pyproject.toml..."
+    uv pip install -r "${pyproject_file}" || return 1
   else
-    echo -e "Warning: requirements.txt not found at ${requirements_file}"
+    echo -e "Warning: pyproject.toml not found at ${my_avbroot_setup}"
+  fi
+
+  local index
+  for index in "${!selected_tools[@]}"; do
+    tool="${selected_tools[${index}]}"
+    executable="${resolved_executables[${index}]}"
+    case "${tool}" in
+      avbroot) variable="PIXENEOS_AVBROOT_BIN" ;;
+      afsr) variable="PIXENEOS_AFSR_BIN" ;;
+      custota-tool) variable="PIXENEOS_CUSTOTA_TOOL_BIN" ;;
+    esac
+    printf -v "${variable}" '%s' "${executable}"
+    export "${variable}"
+    executable_directories+=("$(dirname -- "${executable}")")
+  done
+
+  # The pinned helper currently resolves these names through PATH. Track the
+  # exact injected prefix so a later setup can restore the caller's base PATH.
+  if ((${#executable_directories[@]})); then
+    path_prefix="$(IFS=:; echo "${executable_directories[*]}")"
+    PIXENEOS_EXECUTABLE_BASE_PATH="${PATH}"
+    PIXENEOS_EXECUTABLE_PATH_PREFIX="${path_prefix}"
+    export PATH="${path_prefix}:${PATH}"
   fi
 }
 
@@ -405,11 +726,12 @@ function enable_venv() {
   fi
 
   # Ensure venv_path is set correctly and activate the virtual environment
-  if [ -f "${venv_path}" ]; then
-    source "${venv_path}"
-  else
+  if [[ ! -f "${venv_path}" ]]; then
     echo -e "Virtual environment activation script not found at \`${venv_path}\`."
+    return 1
   fi
+  source "${venv_path}" || return 1
+  [[ -n "${VIRTUAL_ENV:-}" ]]
 }
 
 # Construct URL for the tools and download them
@@ -417,6 +739,7 @@ function enable_venv() {
 function url_constructor() {
   local repository="${1}"
   local user='chenxiaolong'
+  local authority=''
   INTERACTIVE_MODE="${2:-true}"
 
   local repository_upper_case=$(echo "${repository}" | tr '[:lower:]' '[:upper:]')
@@ -426,32 +749,41 @@ function url_constructor() {
   if [[ "${repository}" == "my-avbroot-setup" ]]; then
     URL="${PIXENEOS_AVBROOT_SETUP_SOURCE:-${DOMAIN}/0cwa/${repository}}"
     SIGNATURE_URL=""
+    case "${URL}" in
+      git@*:* )
+        [[ "${URL%%@*}" == 'git' ]] || {
+          echo 'Error: authenticated helper repository URLs are not allowed.' >&2
+          return 1
+        }
+        ;;
+      *://*)
+        authority="${URL#*://}"
+        authority="${authority%%/*}"
+        if [[ "${authority}" == *'@'* && "${URL}" != ssh://git@* ]]; then
+          echo 'Error: authenticated helper repository URLs are not allowed.' >&2
+          return 1
+        fi
+        ;;
+    esac
+  elif is_locked_executable_tool "${repository}"; then
+    echo "Error: executable tools must be acquired from the immutable lock." >&2
+    return 1
   else
-    # Afsr, avbroot, and custota-tool are binaries and are platform dependent. Modules are zipped files.
-    if [[ "${repository}" == "afsr" || "${repository}" == "avbroot" || "${repository}" == "custota-tool" ]]; then
-      local suffix="${ARCH}"
-    else
-      local suffix="release"
-    fi
+    local suffix="release"
 
-    # Custota is a special case
-    # Custota is a module and Custota-Tool is a binary
-    # Both reside in same repository
-    if [[ "${repository}" == "custota-tool" ]]; then
-      local download_page="${DOMAIN}/${user}/Custota/releases/download"
-      local version="v${VERSION[CUSTOTA]}"
-      local application="${repository}-${VERSION[CUSTOTA]}-${suffix}.zip"
-    else
-      local download_page="${DOMAIN}/${user}/${repository}/releases/download"
-      local version="v${VERSION[${repository_upper_case}]}"
-      local application="${repository}-${VERSION[${repository_upper_case}]}-${suffix}.zip"
-    fi
+    local download_page="${DOMAIN}/${user}/${repository}/releases/download"
+    local version="v${VERSION[${repository_upper_case}]}"
+    local application="${repository}-${VERSION[${repository_upper_case}]}-${suffix}.zip"
 
     URL="${download_page}/${version}/${application}"
     SIGNATURE_URL="${download_page}/${version}/${application}.sig"
   fi
 
-  echo -e "URL for \`${repository}\`: ${URL}"
+  if [[ "${repository}" == 'my-avbroot-setup' ]]; then
+    echo -e "URL for \`${repository}\` configured."
+  else
+    echo -e "URL for \`${repository}\`: ${URL}"
+  fi
 
   # If the script is running in interactive mode, prompt the user to overwrite the existing files
   if [[ "${INTERACTIVE_MODE}" == 'true' ]]; then
@@ -496,21 +828,25 @@ function extract_official_keys() {
   # OTA: Extract META-INF/com/android/otacert from the OTA.
   #   (Or from otacerts.zip inside system.img or vendor_boot.img. All 3 files are identical.)
   local ota_zip="${WORKDIR}/${GRAPHENEOS[OTA_TARGET]}.zip"
+  local avb_info
 
   # Extract OTA
-  avbroot ota extract \
+  run_executable_tool avbroot ota extract \
     --input "${ota_zip}" \
     --directory "${WORKDIR}/extracted/extracts" \
-    --all
+    --all || return 1
 
   # Extract vbmeta.img
   # To verify, execute sha256sum avb_pkmd.bin in terminal
   # compare the output with base16-encoded verified boot key fingerprints
   # mentioned at https://grapheneos.org/articles/attestation-compatibility-guide for the respective device
-  avbroot avb info -i "${WORKDIR}/extracted/extracts/vbmeta.img" |
-    grep 'public_key' |
-    sed -n 's/.*public_key: "\(.*\)".*/\1/p' |
-    tr -d '[:space:]' | xxd -r -p >"${WORKDIR}/extracted/avb_pkmd.bin"
+  avb_info="$(run_executable_tool avbroot avb info \
+    -i "${WORKDIR}/extracted/extracts/vbmeta.img")" || return 1
+  local public_key_hex
+  public_key_hex="$(printf '%s\n' "${avb_info}" | sed -n 's/.*public_key: "\(.*\)".*/\1/p' | tr -d '[:space:]')" || return 1
+  [[ -n "${public_key_hex}" ]] || return 1
+  printf '%s' "${public_key_hex}" | xxd -r -p >"${WORKDIR}/extracted/avb_pkmd.bin" || return 1
+  [[ -s "${WORKDIR}/extracted/avb_pkmd.bin" ]] || return 1
 
   # Extract META-INF/com/android/otacert from OTA or otacerts.zip from either vendor_boot.img or system.img
   unzip "${ota_zip}" -d "${WORKDIR}/extracted/ota"
@@ -534,9 +870,12 @@ function make_directories() {
     "${WORKDIR}/modules" \
     "${WORKDIR}/signatures" \
     "${WORKDIR}/tools"
+  chmod 0700 -- "${WORKDIR}" "${WORKDIR}/.keys" "${WORKDIR}/tools"
 }
 
 function generate_ota_info() {
+  validate_device_name || return 1
+
   # Detect build flavor
   local flavor=$([[ ${ADDITIONALS[ROOT]} == 'true' ]] && echo "magisk-${VERSION[MAGISK]}" || echo "rootless")
   local debug_suffix=""
@@ -545,35 +884,199 @@ function generate_ota_info() {
     debug_suffix="-debug-adb"
   fi
 
-  # e.g. bluejay-2024082200-rootless-abc12345-dirty.zip
-  # Debug builds are intentionally labeled, e.g. bluejay-2024082200-rootless-debug-adb-abc12345.zip
-  OUTPUTS[PATCHED_OTA]="${DEVICE_NAME}-${VERSION[GRAPHENEOS]}-${flavor}${debug_suffix}-$(git rev-parse --short HEAD)$(dirty_suffix).zip"
+  module_selection_fingerprint >/dev/null || return 1
+  # Debug builds are intentionally labeled. The stable selection fingerprint
+  # prevents otherwise identical ROM/profile variants from colliding.
+  OUTPUTS[PATCHED_OTA]="${DEVICE_NAME}-${VERSION[GRAPHENEOS]}-${flavor}${debug_suffix}-${MODULE_SELECTION_FINGERPRINT}-$(git rev-parse --short HEAD)$(dirty_suffix).zip"
+}
+
+function _toml_trim() {
+  local value="${1}"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "${value}"
+}
+
+function _toml_fail() {
+  echo "Error: ${1}" >&2
+  return 1
+}
+
+function _toml_decode_string() {
+  local raw="${1}"
+  local value="${raw:1:${#raw}-2}"
+  local decoded='' char next index
+
+  for ((index = 0; index < ${#value}; index++)); do
+    char="${value:index:1}"
+    if [[ "${char}" == "\\" ]]; then
+      index=$((index + 1))
+      [[ ${index} -lt ${#value} ]] || return 1
+      next="${value:index:1}"
+      [[ "${next}" == "\\" || "${next}" == '"' ]] || return 1
+      decoded+="${next}"
+    elif [[ "${char}" == '"' || "${char}" == $'\n' || "${char}" == $'\r' ]]; then
+      return 1
+    else
+      decoded+="${char}"
+    fi
+  done
+
+  printf '%s' "${decoded}"
+}
+
+function _toml_key_definition() {
+  local section="${1}"
+  local key="${2}"
+  local legacy_mode="${3}"
+
+  TOML_KEY_CANONICAL=''
+  TOML_KEY_TYPE=''
+
+  config_schema_lookup_key "${section}" "${key}" "${legacy_mode}" || return 1
+  TOML_KEY_CANONICAL="${CONFIG_SCHEMA_CANONICAL}"
+  TOML_KEY_TYPE="${CONFIG_SCHEMA_TYPE[${TOML_KEY_CANONICAL}]}"
+}
+
+function _toml_caller_override_present() {
+  config_schema_caller_present "${1}"
+}
+
+function _toml_apply_value() {
+  local canonical="${1}"
+  local value="${2}"
+
+  _toml_caller_override_present "${canonical}" && return 0
+  config_schema_apply_value "${canonical}" "${value}"
 }
 
 function check_toml_env() {
-  declare -A config_vars
-  toml_file="env.toml"
+  local toml_file="${1:-env.toml}"
+  local line section='' raw_key raw_value key value type
+  local legacy_mode=true seen_section=false
+  declare -A seen_sections=()
 
-  if [ -f "$toml_file" ]; then
-    while IFS='=' read -r key value; do
-      key=$(echo "$key" | xargs)                                  # Trim whitespace
-      value=$(echo "$value" | xargs | sed -E 's/^"([^"]*)"$/\1/') # Trim whitespace and quotes
-      if [[ -n "$key" && -n "$value" ]]; then
-        config_vars["$key"]="$value"
-      fi
-    done < <(grep -v '^#' "$toml_file") # Ignore comments
+  TOML_CONFIG_PRESENT=()
+  TOML_CONFIG_VALUES=()
+  [[ -f "${toml_file}" ]] || return 0
 
-    if [[ ${#config_vars[@]} -gt 0 ]]; then
-      echo -e "Found variables in \`${toml_file}\` and will take precedence over other values.\n"
-      for key in "${!config_vars[@]}"; do
-        echo -e "${key}: ${config_vars[$key]}"
-        eval "${key}=${config_vars[$key]}"
-      done
-    else
-      echo -e "Failed to find the required variables in \`${toml_file}\`.\n"
-      exit 1
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    line="$(_toml_trim "${line}")"
+    [[ -z "${line}" || "${line}" == \#* ]] && continue
+
+    if [[ "${line}" =~ ^\[([a-z]+)\]$ ]]; then
+      section="${BASH_REMATCH[1]}"
+      case "${section}" in
+        device|build|github) ;;
+        *) _toml_fail "unknown configuration section: ${section}"; return 1 ;;
+      esac
+      [[ ${seen_sections[${section}]+x} ]] && {
+        _toml_fail "duplicate configuration section: ${section}"
+        return 1
+      }
+      seen_sections[${section}]=true
+      seen_section=true
+      [[ "${section}" != device ]] && legacy_mode=false
+      continue
     fi
+
+    [[ "${line}" == \[* ]] && {
+      _toml_fail "malformed configuration section: ${line}"
+      return 1
+    }
+    [[ "${line}" =~ ^([^=]+)=(.*)$ ]] || {
+      _toml_fail "malformed configuration assignment: ${line}"
+      return 1
+    }
+    raw_key="$(_toml_trim "${BASH_REMATCH[1]}")"
+    raw_value="$(_toml_trim "${BASH_REMATCH[2]}")"
+
+    case "${raw_key}" in
+      \'*\')
+        [[ "${raw_key: -1}" == "'" && ${#raw_key} -gt 2 ]] || {
+          _toml_fail "malformed configuration key: ${raw_key}"
+          return 1
+        }
+        key="${raw_key:1:${#raw_key}-2}"
+        ;;
+      *) key="${raw_key}" ;;
+    esac
+    [[ "${key}" =~ ^[A-Z_][A-Z0-9_]*$ ||
+      "${key}" =~ ^(GRAPHENEOS|ADDITIONALS|MAGISK)\[[A-Z_][A-Z0-9_]*\]$ ]] || {
+      _toml_fail "malformed configuration key: ${key}"
+      return 1
+    }
+
+    if ! _toml_key_definition "${section}" "${key}" "${legacy_mode}"; then
+      _toml_fail "unsupported configuration key in [${section:-legacy}]: ${key}"
+      return 1
+    fi
+    type="${TOML_KEY_TYPE}"
+
+    case "${raw_value}" in
+      true|false) value="${raw_value}" ;;
+      '"'*)
+        [[ "${raw_value: -1}" == '"' && ${#raw_value} -ge 2 ]] || {
+          _toml_fail "malformed configuration value for ${key}"
+          return 1
+        }
+        value="$(_toml_decode_string "${raw_value}")" || {
+          _toml_fail "malformed configuration string for ${key}"
+          return 1
+        }
+        ;;
+      *)
+        _toml_fail "malformed configuration value for ${key}"
+        return 1
+        ;;
+    esac
+
+    if [[ "${type}" == string && ( "${raw_value}" == true || "${raw_value}" == false ) ]]; then
+      _toml_fail "configuration value for ${key} must be a quoted string"
+      return 1
+    fi
+
+    if ! config_schema_validate_value "${TOML_KEY_CANONICAL}" "${value}"; then
+      if [[ "${type}" == boolean ]]; then
+        _toml_fail "configuration value for ${key} must be true or false"
+      else
+        _toml_fail "configuration value for ${key} contains a newline"
+      fi
+      return 1
+    fi
+
+    local canonical="${TOML_KEY_CANONICAL}"
+    [[ ${TOML_CONFIG_PRESENT[${canonical}]+x} ]] && {
+      _toml_fail "duplicate configuration assignment: ${canonical}"
+      return 1
+    }
+    TOML_CONFIG_PRESENT[${canonical}]=true
+    TOML_CONFIG_VALUES[${canonical}]="${value}"
+    _toml_apply_value "${canonical}" "${value}"
+  done <"${toml_file}"
+
+  if [[ "${seen_section}" == true ]]; then
+    echo "Loaded typed configuration from \`${toml_file}\`."
   fi
+}
+
+function toml_config_has() {
+  [[ ${TOML_CONFIG_PRESENT[${1}]+x} ]]
+}
+
+function toml_resolve_value() {
+  local canonical="${1-}"
+  local fallback="${2-}"
+
+  # Keep the historical public adapter contract: callers may ask for an
+  # unknown key and receive their fallback. Strict schema callers use the
+  # config_schema_* helpers directly and still fail closed for unknown keys.
+  if ! config_schema_key_exists "${canonical}"; then
+    printf '%s' "${fallback}"
+    return 0
+  fi
+
+  config_schema_resolve_value "$@"
 }
 
 function supported_tools() {

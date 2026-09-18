@@ -1,0 +1,19 @@
+{
+  "compatibility_version": 1,
+  "repository": "https://github.com/0cwa/my-avbroot-setup",
+  "revision": "179079367a4ddd0bb2ed351260b2b433901d2605",
+  "targets": {
+    "patch.py": {
+      "sha256": "522a2900e97ca5f0fb06aebe6a85efc0495bd3fefa2b0a5c9794b939490cfbc5",
+      "replacement": {
+        "kind": "qualified_call_argument",
+        "qualified_name": "external.generate_update_info",
+        "arguments": [
+          "update_info",
+          "args.output.name"
+        ],
+        "to": "{release_url!r}"
+      }
+    }
+  }
+}

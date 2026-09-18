@@ -17,7 +17,10 @@ function main() {
     check_toml_env
   fi
 
-  # Fetch the latest version of GrapheneOS and Magisk
+  resolve_rom_profile
+  enforce_output_policy "${OUTPUT_SCOPE}"
+
+  # Fetch the latest ROM version and Magisk
   get_latest_version
   # Check for requirements and download them accordingly
   check_and_download_dependencies

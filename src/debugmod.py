@@ -13,7 +13,7 @@ from lib.modules import Module, ModuleRequirements
 class DebugMod(Module):
     zip_path: Path
     sig_path: Path
-    
+
     # Class constants
     SELINUX_RULES: ClassVar[list[str]] = [
         # Core ADB debug rules

@@ -13,6 +13,60 @@ source src/declarations.sh
 RETRY_COUNT=0
 MAX_RETRIES=3
 
+# Require lock/profile inputs to be regular, non-symlink files whose exact
+# contents are already committed in the current PixeneOS checkout.
+function verify_checked_in_locked_input() {
+  local input_path="${1}"
+  local repository_root resolved_path relative_path
+  local committed_object working_object
+
+  [[ -n "${input_path}" && -f "${input_path}" && ! -L "${input_path}" ]] ||
+    return 1
+
+  repository_root="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
+  resolved_path="$(realpath -e -- "${input_path}" 2>/dev/null)" || return 1
+
+  case "${resolved_path}" in
+  "${repository_root}"/*)
+    relative_path="${resolved_path#"${repository_root}"/}"
+    ;;
+  *)
+    return 1
+    ;;
+  esac
+
+  git -C "${repository_root}" ls-files --error-unmatch -- \
+    "${relative_path}" >/dev/null 2>&1 || return 1
+  git -C "${repository_root}" diff --quiet --no-ext-diff -- \
+    "${relative_path}" || return 1
+  git -C "${repository_root}" diff --cached --quiet --no-ext-diff -- \
+    "${relative_path}" || return 1
+  committed_object="$(
+    git -C "${repository_root}" rev-parse --verify \
+      "HEAD:${relative_path}" 2>/dev/null
+  )" || return 1
+  working_object="$(
+    git -C "${repository_root}" hash-object -- "${resolved_path}" 2>/dev/null
+  )" || return 1
+  [[ "${working_object}" == "${committed_object}" ]]
+}
+
+function verify_fdroid_privileged_extension_inputs() {
+  local lock_path="${1}"
+  local profile_path="${2}"
+
+  if [[ -z "${lock_path}" || -z "${profile_path}" ]]; then
+    echo "Error: F-Droid locked mode requires an explicit lock and profile." >&2
+    return 1
+  fi
+
+  if ! verify_checked_in_locked_input "${lock_path}" ||
+    ! verify_checked_in_locked_input "${profile_path}"; then
+    echo "Error: F-Droid lock and profile must be clean checked-in regular files." >&2
+    return 1
+  fi
+}
+
 # Function to look after number of times a retry has been made if the auto retry flag is enabled
 function auto_retry_check() {
   if [[ "${ADDITIONALS[RETRY]}" == "true" ]]; then
@@ -39,6 +93,11 @@ function verify_downloads() {
   local tool="${1}"
   local tool_path=""
 
+  if [[ "${tool}" == "afsr" || "${tool}" == "avbroot" || "${tool}" == "custota-tool" ]]; then
+    echo "Error: executable tools require immutable-lock bootstrap verification." >&2
+    return 1
+  fi
+
   echo "Verifying \`${tool}\`..."
 
   if [[ -f "${WORKDIR}/modules/${tool}.zip" ]] && [ "${tool}" != "magisk" ]; then
@@ -64,8 +123,10 @@ function verify_downloads() {
     return $?
   fi
 
-  # Check if signatures are present for all downloaded files except for `my-avbroot-setup` and `magisk`
-  if [[ ! -n "$(ls "${WORKDIR}/signatures/"*.sig 2>/dev/null)" && "${tool}" != "my-avbrot-setup" && "${tool}" != "magisk" ]]; then
+  # Require the matching signature for every downloaded artifact except for
+  # `my-avbroot-setup` and `magisk`.
+  if [[ "${tool}" != "my-avbroot-setup" && "${tool}" != "magisk" &&
+    ! -f "${WORKDIR}/signatures/${tool}.zip.sig" ]]; then
     echo -e "Error: Signature for \`${tool}\` not found in \`${WORKDIR}/signatures\`\n"
     auto_retry_check
     return $?

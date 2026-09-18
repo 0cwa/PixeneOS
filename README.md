@@ -1,57 +1,43 @@
-# PixeneOS (GrapheneOS++) - Now Also For Lineage!
-(more info coming soonish/upon request)
+# PixeneOS
+
 ## Description
 
-PixeneOS is a `shell` script designed to patch GrapheneOS OTA (Over The Air) images with custom modules, providing additional features. This tool relies heavily on upstream projects for its functionality.
+PixeneOS patches supported Android ROM OTA images with a selected set of modules while preserving AVB/OTA signing and update metadata. The maintained ROM profiles currently cover GrapheneOS and LineageOS. The project relies on upstream components from chenxiaolong and other projects, but keeps fork-specific release, trust, and compatibility policy in this repository.
 
 ## Features
 
 - [BCR](https://github.com/chenxiaolong/BCR)
 - [Custota](https://github.com/chenxiaolong/Custota)
-- [Magisk](https://github.com/pixincreate/Magisk)
 - [MSD](https://github.com/chenxiaolong/MSD)
 - [OEMUnlockOnBoot](https://github.com/chenxiaolong/OEMUnlockOnBoot)
 - [AlterInstaller](https://github.com/chenxiaolong/AlterInstaller)
+- Optional Magisk using the repository selected by the build
+- Optional local boot animation
+- Optional locked F-Droid Privileged Extension integration (default-off)
 
 > [!NOTE]
 >
-> 1. This project is not affiliated with GrapheneOS or any of the mentioned projects. It is a personal project for personal use.
-> 2. Currently, the project only supports Linux due to compatibility issues with other operating systems (`libsepol` is highly Linux-specific).
+> 1. PixeneOS is not affiliated with GrapheneOS, LineageOS, or the upstream projects it integrates.
+> 2. Linux is the supported host platform for the complete patching workflow.
 
 ## Requirements
 
-To use this project, you need the following (most dependencies will be handled by the script, except for `git` and `python`):
+Host prerequisites include Git, Python 3, `curl`, `jq`, `unzip`, `xxd`, `e2fsprogs`, and `pkg-config`. A Linux host is recommended; WSL or a Linux VM can also be used.
 
-- A Linux machine is recommended (Needed for running a statically-linked Android executable). `WSL` (Windows Subsystem for Linux) or a `VM` (Virtual Machine) can also be used instead
-- Tools (must be in the path):
-  - `afsr` (>= version 1.0.2)
-  - `avbroot` (>= version 3.12.0)
-  - `my_avbroot_setup` (>= commit `16636c`)
-  - `custota-tool` (>= version 5.2)
-  - `git`
-  - `Magisk` (>= version 27006 -- optional)
-  - `python`
-- Modules:
-  - `AlterInstaller` (>= version 2.0)
-  - `BCR` (>= version 1.65)
-  - `Charge Limit`
-  - `Custota` (>= version 5.2)
-  - `MSD` (>= version 1.8)
-  - `OEMUnlockOnBoot` (>= version 1.1)
-- Dependencies:
-  - `e2fsprogs`
-  - `pkg-config`
-  - `tomlkit` (Python dependency)
-  - `pydantic` (Python dependency)
+Executable tools are **not** expected to be preinstalled in `PATH`. PixeneOS authenticates and installs the exact AFSR, AVBRoot, and Custota-tool archives declared in [`locks/executable-tools-v1.json`](locks/executable-tools-v1.json), including archive/member hashes, modes, and the reviewed upstream signer binding. See [Executable tool trust](docs/executable-tool-trust.md).
+
+The maintained `0cwa/my-avbroot-setup` helper is pinned to an exact Git revision and checked by the compatibility manifest in [`tools/compat/avbroot_setup_compat.json`](tools/compat/avbroot_setup_compat.json). Its Python dependencies are installed from its `pyproject.toml` with `uv`.
+
+Module versions are selected in `src/declarations.sh`; disabled modules are neither acquired nor passed to the patch helper.
 
 ## Working
 
 This repository acts as a server.
 
-1. [Release.yml](.github/workflows/release.yml) checks if a build already exists. If only the `rootless` flavor exists and the user opts for the `magisk` flavor, it builds it, and vice versa. If both flavors exist for a specific version and device, it skips the build.
-2. The workflow calls the build script, which downloads all the [requirements](#requirements) and patches the OTA by adding your signing key and installing the additional packages mentioned in the [features section](#features).
-3. The patched OTA is released and available in the [releases section](https://github.com/pixincreate/PixeneOS/releases).
-4. The server branch is updated based on the selected flavor (`rootless` is the default).
+1. [release.yml](.github/workflows/release.yml) resolves the ROM version and module-selection fingerprint, then verifies whether the exact device/flavor/selection asset triplet already exists.
+2. The reusable build workflow authenticates locked executable tools, verifies the pinned helper contract, downloads the selected modules, and patches/signs the OTA.
+3. Published builds upload the OTA, its Custota signature, and selection metadata to the repository release.
+4. After the exact assets are verified, the `gh-pages` OTA metadata is updated. Older assets for the same selection fingerprint are pruned without deleting other valid variants.
 
 ## Usage
 
@@ -59,7 +45,7 @@ This repository acts as a server.
 
 Reading the [AVBRoot docs](https://github.com/chenxiaolong/AVBRoot) is essential before proceeding with PixeneOS.
 
-1. Ensure the device has an unpatched version of GrapheneOS installed. The version must match the one from PixeneOS. It is important to make sure that the version installed matches the version on PixeneOS
+1. Ensure the device has an unpatched version of the selected supported ROM (GrapheneOS or LineageOS) installed. The version must match the one from PixeneOS. It is important to make sure that the version installed matches the version on PixeneOS
 2. Start with a version before the latest to ensure OTA functionality.
 
 > [!IMPORTANT]
@@ -70,7 +56,7 @@ Reading the [AVBRoot docs](https://github.com/chenxiaolong/AVBRoot) is essential
 
 > [!IMPORTANT]
 > In case you run into an issue that throws `Device is corrupt. It can't be trusted` soon after first install, try sideloading the OTA once before proceeding with flashing the custom AVB public key. This suggestion is based on the experience of users who faced this issue. See [#89](https://github.com/schnatterer/rooted-graphene/issues/89).
-> Also, check the FAQ section for more information on [this](https://github.com/pixincreate/PixeneOS/blob/main/docs/FAQ.md#im-getting-an-error-on-boot-saying-device-is-corrupt-it-cant-be-trusted-what-can-i-do-what-are-my-options) issue.
+> Also, check the FAQ section for more information on [this](docs/FAQ.md#im-getting-an-error-on-boot-saying-device-is-corrupt-it-cant-be-trusted-what-can-i-do-what-are-my-options) issue.
 
 > [!CAUTION]
 > If flashing fails, [**do not switch the slot**](https://github.com/schnatterer/rooted-graphene/issues/96#issuecomment-3128121844).
@@ -81,7 +67,7 @@ It is easier to use the web installer to flash GrapheneOS. However, it is recomm
 
 - Use the [web installer](https://grapheneos.org/install/web) to install GrapheneOS
 - Once installed, **do not** re-lock the bootloader by clicking `Lock bootloader` under the `Locking the bootloader` section
-- Proceed to the [patching section](#patching-grapheneos-cooking-pixeneos)
+- Proceed to the [patching section](#patching-the-selected-rom-cooking-pixeneos)
 
 #### Manual Install
 
@@ -104,11 +90,11 @@ It is easier to use the web installer to flash GrapheneOS. However, it is recomm
    ./flash-all.sh # or .bat on Windows
    ```
 
-4. Proceed to the [patching section](#patching-grapheneos-cooking-pixeneos)
+4. Proceed to the [patching section](#patching-the-selected-rom-cooking-pixeneos)
 
-#### Patching GrapheneOS (cooking PixeneOS)
+#### Patching the selected ROM (cooking PixeneOS)
 
-1. Download the [OTA from the releases](https://github.com/pixincreate/PixeneOS/releases). Ensure the version matches the installed version.
+1. Download the [OTA from the current repository's releases](../../releases). Ensure the version matches the installed version.
 
    Extract the partition images from the patched OTA that are different from the original.
 
@@ -183,17 +169,11 @@ It is easier to use the web installer to flash GrapheneOS. However, it is recomm
 
 ### Using Root
 
-Rooting, from security point of view is **not** recommended. But that should not stop a power user from using it.
+Root changes the device security model and can introduce compatibility breakage across ROM updates. Use it only when you understand the trade-offs for your device and selected ROM.
 
-The version of [Magisk](https://github.com/topjohnwu/Magisk) provided by Topjohnwu does not hold good with GrapheneOS as the developers of Magisk are hostile with GrapheneOS developers and its users. See [7606](https://github.com/topjohnwu/Magisk/pull/7606).
+PixeneOS defaults to the GrapheneOS-oriented `pixincreate/Magisk` fork. The repository is configurable through `MAGISK[REPOSITORY]` in `env.toml`; use another source only after confirming compatibility with the selected ROM. Magisk/Zygisk behavior can change across releases, so rooted builds should be revalidated after ROM or Magisk updates.
 
-The fork of [Magisk](https://github.com/pixincreate/Magisk) that is maintained by @pixincreate does overcome of the limitations by making root access work on GrapheneOS while allowing Zygisk to work. It of course with its own limitations set up by developers who develop root hiding solutions which [prevents](https://github.com/pixincreate/Magisk/issues/1) the fork from supporting modules like Shamiko.
-
-In general, using [Magisk and especially the features like Zygisk with Graphene are likely to have the risk of breaking things with every new release in future.](https://github.com/chenxiaolong/avbroot/issues/213#issuecomment-1986637884).
-
-Using the [fork of Magisk that supports Zygisk](https://github.com/pixincreate/Magisk) is recommended over official Magisk and KernelSU as the official Magisk is completely broken on GrapheneOS including `Zygisk` while getting KernelSU working on GrapheneOS is itself a tedious task as GrapheneOS enforces signature verification on Kernel and hence, building GrapheneOS with KernelSU from scratch is the only option if root is need.
-
-KernelSU does have some parts like `ksud`'s sources closed which makes it inappropriate for a tool that has so much influence on the device.
+KernelSU is not integrated by this repository. Adding another root implementation would require an explicit compatibility and signature-verification design rather than treating it as interchangeable with Magisk.
 
 > [!NOTE]
 > For Magisk preinit, see [Magisk preinit](#magisk-preinit)
@@ -242,31 +222,32 @@ Updates can be done by patching (or re-patching) the OTA using `adb sideload`:
 PixeneOS leverages Custota:
 
 1. Disable the [system updater app](https://github.com/chenxiaolong/avbroot#ota-updates).
-2. Open Custota and set the OTA server URL to: `https://pixincreate.github.io/PixeneOS/<rootless/magisk>`
+2. Open Custota and set the OTA server URL to the repository's GitHub Pages publication URL, using the form `https://<owner>.github.io/<repository>/<rootless/magisk>`.
 
-For more info, refer to the [server](https://github.com/pixincreate/PixeneOS/tree/gh-pages) branch.
+For more info, refer to the current repository's [server](../../tree/gh-pages) branch.
 
 ## Tool Usage
 
-PixeneOS can be run on your local machine. A Linux based machine is preferred.
+PixeneOS can be run locally on Linux.
 
-1. Clone or fork the repository
-
-2. Modify `env.toml` to set environment variables (your device model, AVBRoot architecture, GrapheneOS update channel and etc.,)
-
-> [!IMPORTANT]
-> Make sure that `env.toml` file exist in root of the project.
-
-3. Run the program end-to-end:
+1. Clone or fork the repository.
+2. Review the checked-in `env.toml` example and set the device, ROM family/update channel, root settings, and module toggles you need. Configuration is typed and validated by `src/config_schema.sh`.
+3. Run the patch pipeline:
 
    ```shell
    . src/main.sh
    ```
 
-> [!NOTE]
-> Running the program end-to-end will only generate the patched OTA package locally and will not push it to the server (server branch that contains the json file which is read by the Custota).
+Local runs generate the patched OTA but do not publish release assets or update `gh-pages`. Configuration precedence is: declaration defaults, then `env.toml`, then explicit caller/workflow inputs. Invalid or unknown TOML keys fail closed.
 
-`INTERACTIVE_MODE`, by default is set to `true` that calls `check_toml_env` function to check the existence of `env.toml`. If the file exist, it will read the `env.toml` file and set the environment variables accordingly. If the `env.toml` is non-existent, ignored. If it exist, and the format is wrong, the script exits with an error.
+### Optional custom boot animation
+
+To use a local Android boot animation, place the ZIP at exactly
+`custom/boot-animation/bootanimation.zip`. Builds remain unchanged by default;
+enable the feature explicitly with `ADDITIONALS_BOOT_ANIMATION=true`, or add
+`'ADDITIONALS[BOOT_ANIMATION]' = true` to `env.toml`. The archive is validated
+before patching, and its exact SHA-256 is included in the module-selection
+fingerprint. The payload is not read or required while the option is disabled.
 
 ### Release URL and source overrides
 
@@ -290,10 +271,18 @@ To set up automated release, add the following variables in GitHub secrets:
   - `PASSPHRASE_AVB`
   - `PASSPHRASE_OTA`
 
+### Force update
+
+Scheduled runs normally skip an exact selection that is already published. Set `FORCE_UPDATE = true` under `[build]` in `env.toml` to rebuild the current ROM version; manual runs can use `release-type: force-publish`. Superseded assets are cleaned only when their selection metadata matches the same device, ROM family, and module-selection fingerprint.
+
+### Multiple devices
+
+Run [multi-release.yml](.github/workflows/multi-release.yml) manually to build multiple GrapheneOS devices through the same release preflight. Enter a comma-separated list such as `bramble, shiba`; rooted builds use `device:MAGISK_PREINIT`, for example `bramble:sda10, shiba:sda10`. When the workflow input is empty it reads `DEVICES` from `env.toml`.
+
 ### Hop Between Root and Rootless
 
-- To remove root, set the following URL in Custota: `https://pixincreate.github.io/PixeneOS/rootless/`
-- To add root, set the following URL in Custota: `https://pixincreate.github.io/PixeneOS/magisk/`
+- To remove root, set the repository's GitHub Pages publication URL ending in `/rootless/` in Custota.
+- To add root, set the repository's GitHub Pages publication URL ending in `/magisk/` in Custota.
 
 ### Commands
 
@@ -338,7 +327,7 @@ To set up automated release, add the following variables in GitHub secrets:
 
 ## Reverting Back to Stock
 
-To revert to stock GrapheneOS or firmware:
+To revert to stock GrapheneOS, LineageOS, or firmware:
 
 1. Reboot into fastboot mode and unlock the bootloader. **This will trigger a data wipe**. Ensure data is backed up.
 
@@ -358,10 +347,9 @@ To know more about the projects used in this repository, refer to the following 
 - [AlterInstaller](https://github.com/chenxiaolong/AlterInstaller)
 - [AVBRoot](https://github.com/chenxiaolong/AVBRoot)
 - [BCR](https://github.com/chenxiaolong/BCR)
-- [ChargeLimit](https://github.com/chenxiaolong/ChargeLimit)
 - [Custota](https://github.com/chenxiaolong/Custota)
 - [GrapheneOS](https://grapheneos.org)
-- [Magisk](https://github.com/pixincreate/Magisk)
+- [Magisk](https://github.com/topjohnwu/Magisk) (or the repository configured in `env.toml`)
 - [MSD](https://github.com/chenxiaolong/MSD)
 - [OEMUnlockOnBoot](https://github.com/chenxiaolong/OEMUnlockOnBoot)
 - [Rooted Graphene](https://github.com/schnatterer/rooted-graphene)
@@ -385,7 +373,7 @@ Third-party-derived code, dependencies, modules, tools, release artifacts, and d
   - [BCR](https://github.com/chenxiaolong/BCR)
   - [Custota](https://github.com/chenxiaolong/Custota)
   - [MSD](https://github.com/chenxiaolong/MSD)
-  - [my-avbroot-setup](https://github.com/chenxiaolong/my-avbroot-setup)
+  - [my-avbroot-setup](https://github.com/0cwa/my-avbroot-setup)
   - [OEMUnlockOnBoot](https://github.com/chenxiaolong/OEMUnlockOnBoot)
 - [Rooted-Graphene](https://github.com/schnatterer/rooted-graphene) -- for motivation and inspiration
 

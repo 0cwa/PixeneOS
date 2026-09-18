@@ -1,0 +1,157 @@
+name: Patch and Release GrapheneOS OTA for Multiple Devices
+
+on:
+  workflow_dispatch:
+    inputs:
+      devices:
+        description: 'Comma-separated device code names. For rooted builds append the Magisk preinit device, for example "bramble:sda10, shiba:sda10". Leave empty to use DEVICES from env.toml.'
+        required: false
+      root:
+        description: Add root to all builds
+        required: false
+        type: boolean
+        default: false
+      afsr:
+        description: Include AFSR
+        required: false
+        type: boolean
+        default: true
+      alterinstaller:
+        description: Include AlterInstaller
+        required: false
+        type: boolean
+        default: true
+      bcr:
+        description: Include BCR
+        required: false
+        type: boolean
+        default: true
+      custota:
+        description: Include Custota
+        required: false
+        type: boolean
+        default: true
+      msd:
+        description: Include MSD
+        required: false
+        type: boolean
+        default: true
+      oemunlockonboot:
+        description: Include OEMUnlockOnBoot
+        required: false
+        type: boolean
+        default: true
+      fdroid-privileged-extension:
+        description: Include the locked F-Droid Privileged Extension
+        required: false
+        type: boolean
+        default: false
+      boot-animation:
+        description: Include the local custom boot animation
+        required: false
+        type: boolean
+        default: false
+      update-channel:
+        description: GrapheneOS update channel
+        required: false
+        default: stable
+      compatible-sepolicy-patching:
+        description: Enable compatible SELinux patching
+        required: false
+        type: boolean
+        default: false
+      allow-unauthorized-adb:
+        description: Enable unauthorized ADB for build-only debugging
+        required: false
+        type: boolean
+        default: false
+      release-type:
+        description: Release behavior
+        required: true
+        type: choice
+        options:
+          - default
+          - build-only
+          - force-publish
+        default: default
+
+permissions:
+  contents: write
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      devices: ${{ steps.parse.outputs.devices }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Resolve device matrix
+        id: parse
+        shell: bash
+        env:
+          DEVICES_INPUT: ${{ inputs.devices }}
+          ROOT_INPUT: ${{ inputs.root }}
+        run: |
+          set -euo pipefail
+          devices_raw="${DEVICES_INPUT}"
+
+          if [[ -z "${devices_raw}" ]]; then
+            source src/util_functions.sh
+            check_toml_env
+            devices_raw="${DEVICES:-}"
+          fi
+
+          [[ -n "${devices_raw}" ]] || {
+            echo "::error::No devices provided. Set the devices input or DEVICES in env.toml."
+            exit 1
+          }
+
+          devices="$(jq -cn --arg list "${devices_raw}" '
+            $list
+            | split(",")
+            | map(gsub("^\\s+|\\s+$"; ""))
+            | map(select(length > 0) | split(":") | {
+                device: .[0],
+                preinit: (.[1] // "")
+              })
+          ')"
+
+          [[ "$(jq 'length' <<<"${devices}")" -gt 0 ]] || {
+            echo "::error::No valid devices found in: ${devices_raw}"
+            exit 1
+          }
+
+          if [[ "${ROOT_INPUT}" == "true" ]] &&
+             jq -e 'any(.[]; (.preinit | length) == 0)' <<<"${devices}" >/dev/null; then
+            echo "::error::Rooted multi-device builds require device:MAGISK_PREINIT for every entry."
+            exit 1
+          fi
+
+          echo "devices=${devices}" >>"${GITHUB_OUTPUT}"
+
+  release:
+    needs: matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.matrix.outputs.devices) }}
+    uses: ./.github/workflows/release.yml
+    with:
+      device-id: ${{ matrix.target.device }}
+      root: ${{ inputs.root }}
+      afsr: ${{ inputs.afsr }}
+      magisk-preinit-device: ${{ matrix.target.preinit }}
+      update-channel: ${{ inputs.update-channel }}
+      alterinstaller: ${{ inputs.alterinstaller }}
+      bcr: ${{ inputs.bcr }}
+      custota: ${{ inputs.custota }}
+      msd: ${{ inputs.msd }}
+      oemunlockonboot: ${{ inputs.oemunlockonboot }}
+      fdroid-privileged-extension: ${{ inputs.fdroid-privileged-extension }}
+      compatible-sepolicy-patching: ${{ inputs.compatible-sepolicy-patching }}
+      allow-unauthorized-adb: ${{ inputs.allow-unauthorized-adb }}
+      boot-animation: ${{ inputs.boot-animation }}
+      release-type: ${{ inputs.release-type }}
+    secrets: inherit
