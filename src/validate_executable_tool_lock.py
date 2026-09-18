@@ -60,9 +60,9 @@ MODE = re.compile(r"0[0-7]{3}\Z")
 
 TOOL_POLICY = {
     "afsr": {
-        "version": "1.0.4",
+        "version": "2.0.0",
         "repository": "afsr",
-        "artifact_name": "afsr-1.0.4-x86_64-unknown-linux-gnu.zip",
+        "artifact_name": "afsr-2.0.0-x86_64-unknown-linux-gnu.zip",
         "layout": {"afsr": "0755"},
     },
     "avbroot": {
@@ -72,9 +72,9 @@ TOOL_POLICY = {
         "layout": {"LICENSE": "0644", "README.md": "0644", "avbroot": "0755"},
     },
     "custota-tool": {
-        "version": "6.4",
+        "version": "6.5",
         "repository": "Custota",
-        "artifact_name": "custota-tool-6.4-x86_64-unknown-linux-gnu.zip",
+        "artifact_name": "custota-tool-6.5-x86_64-unknown-linux-gnu.zip",
         "layout": {"custota-tool": "0755"},
     },
 }
