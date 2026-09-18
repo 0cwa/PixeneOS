@@ -64,4 +64,4 @@ jobs:
 
       - name: Check upstream download endpoints
         shell: bash
-        run: src/ci/smoke_test.sh
+        run: bash src/ci/smoke_test.sh
