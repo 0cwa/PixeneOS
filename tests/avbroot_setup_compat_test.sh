@@ -13,9 +13,6 @@ readonly RAW_SOURCE_BASE="https://raw.githubusercontent.com/0cwa/my-avbroot-setu
 readonly RELEASE_URL="https://releases.example.com/PixeneOS/ota'quoted/build.zip"
 readonly TARGETS=(
   patch.py
-  lib/modules/alterinstaller.py
-  lib/modules/bcr.py
-  lib/modules/oemunlockonboot.py
 )
 readonly TEST_CACHE="$(mktemp -d)"
 trap 'rm -rf -- "${TEST_CACHE}"' EXIT
@@ -179,9 +176,6 @@ root = pathlib.Path(sys.argv[1])
 with tempfile.TemporaryDirectory() as compiled:
     for index, relative in enumerate((
         'patch.py',
-        'lib/modules/alterinstaller.py',
-        'lib/modules/bcr.py',
-        'lib/modules/oemunlockonboot.py',
     )):
         py_compile.compile(
             str(root / relative),
@@ -281,22 +275,14 @@ test_helper_rejects_authenticated_source_without_disclosure() {
 }
 
 test_success_and_idempotence() {
-  local tmpdir root snapshot mode_before relative
+  local tmpdir root snapshot mode_before
   tmpdir="$(mktemp -d)"; root="${tmpdir}/helper"; snapshot="${tmpdir}/after-first"
   prepare_checkout "${root}"
-  mode_before="$(stat -c '%a' "${root}/lib/modules/bcr.py")"
-  if assert_modules_importable "${root}" >/dev/null 2>&1; then
-    fail 'Unpatched source unexpectedly imported successfully'
-  fi
+  mode_before="$(stat -c '%a' "${root}/patch.py")"
   run_helper "${root}"
   assert_python_files_compile "${root}"
-  assert_modules_importable "${root}"
   assert_patch_url "${root}"
-  for relative in lib/modules/alterinstaller.py lib/modules/bcr.py lib/modules/oemunlockonboot.py; do
-    [[ "$(grep -Fc 'from pathlib import Path' "${root}/${relative}")" -eq 1 ]] ||
-      fail "Path import was not inserted exactly once in ${relative}"
-  done
-  [[ "$(stat -c '%a' "${root}/lib/modules/bcr.py")" == "${mode_before}" ]] ||
+  [[ "$(stat -c '%a' "${root}/patch.py")" == "${mode_before}" ]] ||
     fail 'The staged replacement did not preserve file mode'
   snapshot_checkout "${root}" "${snapshot}"
   run_helper "${root}" || fail 'Second compatibility-helper invocation failed'
@@ -331,27 +317,25 @@ test_accepts_equivalent_sources() {
   tmpdir="$(mktemp -d)"; root="${tmpdir}/helper"; prepare_checkout "${root}"
   git -C "${root}" remote set-url origin git@github.com:0cwa/my-avbroot-setup.git
   run_helper "${root}" "ssh://git@github.com/0CWA/my-avbroot-setup/"
-  grep -Fq 'from pathlib import Path' "${root}/lib/modules/bcr.py" ||
-    fail 'Equivalent GitHub source was not accepted'
+  assert_patch_url "${root}" || fail 'Equivalent GitHub source was not accepted'
   rm -rf -- "${tmpdir}"
   tmpdir="$(mktemp -d)"; root="${tmpdir}/helper"; prepare_checkout "${root}"
   git -C "${root}" remote set-url origin https://example.com/alternate-helper.git
   run_helper "${root}" ssh://git@example.com:22/alternate-helper
-  grep -Fq 'from pathlib import Path' "${root}/lib/modules/bcr.py" ||
-    fail 'Equivalent custom-host source was not accepted'
+  assert_patch_url "${root}" || fail 'Equivalent custom-host source was not accepted'
   rm -rf -- "${tmpdir}"
 }
 
 test_rejects_dirty_and_untracked_files() {
   local tmpdir root snapshot
   tmpdir="$(mktemp -d)"; root="${tmpdir}/helper"; snapshot="${tmpdir}/before"
-  prepare_checkout "${root}"; printf '\n# dirty\n' >>"${root}/lib/modules/bcr.py"
+  prepare_checkout "${root}"; printf '\n# dirty\n' >>"${root}/patch.py"
   snapshot_checkout "${root}" "${snapshot}"
   if run_helper "${root}"; then fail 'Same-HEAD dirty file was accepted'; fi
   assert_snapshot "${root}" "${snapshot}"
   rm -rf -- "${tmpdir}"
   tmpdir="$(mktemp -d)"; root="${tmpdir}/helper"; snapshot="${tmpdir}/before"
-  prepare_checkout "${root}"; printf 'unrelated\n' >"${root}/lib/modules/registry.py"
+  prepare_checkout "${root}"; printf 'unrelated\n' >"${root}/unexpected.txt"
   snapshot_checkout "${root}" "${snapshot}"
   if run_helper "${root}"; then fail 'Untracked file was accepted'; fi
   assert_snapshot "${root}" "${snapshot}"
@@ -396,14 +380,14 @@ spec.loader.exec_module(compat)
 real_replace = compat.os.replace
 replace_calls = 0
 
-def fail_on_second_replace(source, destination):
+def fail_on_first_replace(source, destination):
     global replace_calls
     replace_calls += 1
-    if replace_calls == 2:
+    if replace_calls == 1:
         raise OSError('injected replacement failure')
     return real_replace(source, destination)
 
-compat.os.replace = fail_on_second_replace
+compat.os.replace = fail_on_first_replace
 try:
     compat.run(
         pathlib.Path(root),
