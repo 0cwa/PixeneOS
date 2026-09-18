@@ -2,22 +2,16 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2025-2026 PixeneOS contributors
 
-# ---
-# LOGGING
-# Provides simple, timestamped logging functions.
-# ---
-
-# Usage: log "Doing something..."
+# Simple timestamped logging. %b preserves the project's existing escaped
+# multi-line messages while keeping severity explicit.
 log() {
-  local timestamp
-  timestamp=$(date +"%Y-%m-%d %T")
-  printf "[%s] [INFO] -- %s\\n" "$timestamp" "$1"
+  printf "[%s] [INFO] -- %b\n" "$(date +"%Y-%m-%d %T")" "$1"
 }
 
-# Prints an error message to stderr.
-# Usage: error "Something went wrong."
+warn() {
+  printf "[%s] [WARN] -- %b\n" "$(date +"%Y-%m-%d %T")" "$1" >&2
+}
+
 error() {
-  local timestamp
-  timestamp=$(date +"%Y-%m-%d %T")
-  printf "[%s] [ERROR] -- %s\\n" "$timestamp" "$1" >&2
+  printf "[%s] [ERROR] -- %b\n" "$(date +"%Y-%m-%d %T")" "$1" >&2
 }
