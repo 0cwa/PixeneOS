@@ -223,7 +223,7 @@ jobs:
             echo "ROM_PROFILE_PROVIDER=${ROM_PROFILE[PROVIDER]}"
             echo "WORKDIR=${WORKDIR}"
           } >> "${GITHUB_ENV}"
-          case "${ROOT_MODE}" in
+          case "${RESOLVED_ROOT_MODE}" in
             magisk) echo 'ROM_FLAVOR=magisk' >> "${GITHUB_ENV}" ;;
             rootless) echo 'ROM_FLAVOR=rootless' >> "${GITHUB_ENV}" ;;
             both) echo 'ROM_FLAVOR=both' >> "${GITHUB_ENV}" ;;
