@@ -3,6 +3,83 @@ name: Patch and Release GrapheneOS OTA
 on:
   schedule:
     - cron: "0 */6 * * *"
+  workflow_call:
+    inputs:
+      device-id:
+        required: true
+        type: string
+      root:
+        required: false
+        type: boolean
+        default: false
+      afsr:
+        required: false
+        type: boolean
+        default: true
+      alterinstaller:
+        required: false
+        type: boolean
+        default: true
+      bcr:
+        required: false
+        type: boolean
+        default: true
+      custota:
+        required: false
+        type: boolean
+        default: true
+      msd:
+        required: false
+        type: boolean
+        default: true
+      oemunlockonboot:
+        required: false
+        type: boolean
+        default: true
+      fdroid-privileged-extension:
+        required: false
+        type: boolean
+        default: false
+      magisk-preinit-device:
+        required: false
+        type: string
+        default: ""
+      update-channel:
+        required: false
+        type: string
+        default: stable
+      compatible-sepolicy-patching:
+        required: false
+        type: boolean
+        default: false
+      allow-unauthorized-adb:
+        required: false
+        type: boolean
+        default: false
+      boot-animation:
+        required: false
+        type: boolean
+        default: false
+      release-type:
+        required: false
+        type: string
+        default: default
+    secrets:
+      AVB_KEY:
+        required: true
+      CERT_OTA:
+        required: true
+      OTA_KEY:
+        required: true
+      PASSPHRASE_AVB:
+        required: true
+      PASSPHRASE_OTA:
+        required: true
+      GH_TOKEN:
+        required: false
+      EMAIL:
+        required: false
+
   workflow_dispatch:
     inputs:
       device-id:
@@ -244,8 +321,8 @@ jobs:
           ADDITIONALS_MSD: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.msd == 'true' || inputs.msd }}
           ADDITIONALS_OEMUNLOCKONBOOT: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.oemunlockonboot == 'true' || inputs.oemunlockonboot }}
           ADDITIONALS_FDROID_PRIVILEGED_EXTENSION: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.fdroid_privileged_extension == 'true' || inputs.fdroid-privileged-extension }}
-          ADDITIONALS_MAS_COMPATIBLE_SEPOLICY: ${{ github.event_name == 'workflow_dispatch' && inputs.compatible-sepolicy-patching || false }}
-          ADDITIONALS_DEBUG: ${{ github.event_name == 'workflow_dispatch' && inputs.allow-unauthorized-adb || false }}
+          ADDITIONALS_MAS_COMPATIBLE_SEPOLICY: ${{ github.event_name != 'schedule' && inputs.compatible-sepolicy-patching || false }}
+          ADDITIONALS_DEBUG: ${{ github.event_name != 'schedule' && inputs.allow-unauthorized-adb || false }}
           ADDITIONALS_BOOT_ANIMATION: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.boot_animation || inputs.boot-animation || false }}
         run: |
           set -euo pipefail
@@ -266,7 +343,7 @@ jobs:
         env:
           REPOSITORY: ${{ github.repository }}
           ROOT: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.root || inputs.root || false }}
-          DEBUG: ${{ github.event_name == 'workflow_dispatch' && inputs.allow-unauthorized-adb || false }}
+          DEBUG: ${{ github.event_name != 'schedule' && inputs.allow-unauthorized-adb || false }}
           MAGISK_VERSION: ${{ steps.resolve_version.outputs.magisk_version }}
           ROM_FAMILY: grapheneos
           OUTPUT_SCOPE: published
@@ -297,8 +374,8 @@ jobs:
       msd: ${{ github.event_name == 'schedule' && needs.preflight.outputs.msd == 'true' || inputs.msd }}
       oemunlockonboot: ${{ github.event_name == 'schedule' && needs.preflight.outputs.oemunlockonboot == 'true' || inputs.oemunlockonboot }}
       fdroid-privileged-extension: ${{ github.event_name == 'schedule' && needs.preflight.outputs.fdroid_privileged_extension == 'true' || inputs.fdroid-privileged-extension }}
-      compatible-sepolicy-patching: ${{ github.event_name == 'workflow_dispatch' && inputs.compatible-sepolicy-patching || false }}
-      allow-unauthorized-adb: ${{ github.event_name == 'workflow_dispatch' && inputs.allow-unauthorized-adb || false }}
+      compatible-sepolicy-patching: ${{ github.event_name != 'schedule' && inputs.compatible-sepolicy-patching || false }}
+      allow-unauthorized-adb: ${{ github.event_name != 'schedule' && inputs.allow-unauthorized-adb || false }}
       boot-animation: ${{ github.event_name == 'schedule' && needs.preflight.outputs.boot_animation == 'true' || inputs.boot-animation || false }}
       release-type: ${{ github.event_name == 'schedule' && 'default' || inputs.release-type }}
       publish: ${{ github.event_name == 'schedule' || inputs.release-type != 'build-only' }}
