@@ -284,7 +284,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           OTA_ARTIFACT_PATH: ${{ env.OUTPUTS_PATCHED_OTA }}
           SELECTION_METADATA_PATH: ${{ env.SELECTION_METADATA }}
-        run: src/ci/remove_superseded_assets.sh
+        run: bash src/ci/remove_superseded_assets.sh
 
       - name: Publish OTA metadata
         if: inputs.publish && inputs.release-type != 'build-only'
