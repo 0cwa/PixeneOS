@@ -76,7 +76,7 @@ on:
         default: default
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   matrix:
