@@ -214,8 +214,15 @@ test_reusable_workflow() {
 }
 
 test_release_triggers() {
+  local lineage="${WORKFLOW_DIR}/release-lineage.yml"
+
   assert_thin_trigger "${RELEASE}" grapheneos
-  assert_thin_trigger "${WORKFLOW_DIR}/release-lineage.yml" lineageos
+
+  [[ -f "${lineage}" ]] || fail "missing LineageOS release trigger: ${lineage}"
+  assert_contains "${lineage}" 'schedule:' "LineageOS release must remain scheduled"
+  assert_contains "${lineage}" 'uses:[[:space:]]*\./\.github/workflows/build-rom\.yml'     "LineageOS release must call the shared workflow"
+  assert_contains "${lineage}" 'rom-family:[[:space:]]*lineageos'     "LineageOS manual build must select the LineageOS profile"
+  assert_contains "${lineage}" 'SCHEDULE_DEFINITION:[[:space:]]*\.github/schedules/lineageos-pdx235\.toml'     "LineageOS schedule must use the pdx235 definition"
 
   assert_dispatch_default "${RELEASE}" device-id shiba
   assert_dispatch_default "${RELEASE}" root true
@@ -226,146 +233,52 @@ test_release_triggers() {
   assert_dispatch_default "${RELEASE}" oemunlockonboot true
   assert_dispatch_default "${RELEASE}" fdroid-privileged-extension false
   assert_dispatch_default "${RELEASE}" boot-animation false
-  assert_dispatch_default \
-    "${RELEASE}" compatible-sepolicy-patching false
-  assert_dispatch_default \
-    "${WORKFLOW_DIR}/release-lineage.yml" device-id pdx235
-  assert_dispatch_default "${WORKFLOW_DIR}/release-lineage.yml" root true
-  assert_dispatch_default \
-    "${WORKFLOW_DIR}/release-lineage.yml" compatible-sepolicy-patching true
+  assert_dispatch_default "${RELEASE}" compatible-sepolicy-patching false
+  assert_dispatch_default "${lineage}" device-id pdx235
+  assert_dispatch_default "${lineage}" root true
+  assert_dispatch_default "${lineage}" compatible-sepolicy-patching true
+  assert_dispatch_default "${lineage}" boot-animation false
 }
 
 test_config_loading_isolated_to_grapheneos_schedule() {
   local lineage="${WORKFLOW_DIR}/release-lineage.yml"
   local build_only="${WORKFLOW_DIR}/phase3-build-only.yml"
 
-  assert_not_contains "${lineage}" 'env\.toml|check_toml_env' \
-    "LineageOS release must not load GrapheneOS env.toml configuration"
-  assert_not_contains "${build_only}" 'env\.toml|check_toml_env' \
-    "build-only acceptance must keep its declared defaults"
-  assert_contains "${build_only}" 'publish:[[:space:]]*false' \
-    "build-only acceptance must remain local-unpublished"
+  assert_contains "${RELEASE}"     'SCHEDULE_DEFINITION:[[:space:]]*\.github/schedules/grapheneos-shiba\.toml'     "GrapheneOS schedule must use the shiba definition"
+  assert_contains "${lineage}"     'SCHEDULE_DEFINITION:[[:space:]]*\.github/schedules/lineageos-pdx235\.toml'     "LineageOS schedule must use the pdx235 definition"
+  assert_not_contains "${lineage}" 'env\.toml'     "LineageOS schedule must not inherit repository-wide local env.toml"
+  assert_not_contains "${build_only}" 'env\.toml|check_toml_env'     "build-only acceptance must keep its declared defaults"
+  assert_contains "${build_only}" 'publish:[[:space:]]*false'     "build-only acceptance must remain local-unpublished"
 }
 
 test_release_configuration_forwarding() {
-  assert_contains \
-    "${RELEASE}" \
-    'name:[[:space:]]*Load scheduled env\.toml configuration' \
-    "scheduled release must load env.toml"
-  assert_contains \
-    "${RELEASE}" \
-    'if:[[:space:]]*github\.event_name == .schedule.' \
-    "scheduled configuration must be schedule-only"
-  assert_contains \
-    "${RELEASE}" \
-    'source src/util_functions\.sh' \
-    "scheduled configuration must use shared config parsing"
-  assert_contains \
-    "${RELEASE}" \
-    'check_toml_env' \
-    "scheduled configuration must use allowlisted TOML parsing"
-  assert_contains \
-    "${RELEASE}" \
-    'name:[[:space:]]*Resolve expected selection identity' \
-    "release preflight must resolve the canonical selection identity"
-  assert_contains \
-    "${RELEASE}" \
-    'module_selection_fingerprint' \
-    "release preflight must use the shared selection fingerprint"
-  assert_contains \
-    "${RELEASE}" \
-    'expected_variant:[[:space:]]*\$\{\{ steps\.selection_identity\.outputs\.expected_variant \}\}' \
-    "release preflight must expose the resolved identity"
-  assert_contains \
-    "${RELEASE}" \
-    'EXPECTED_VARIANT:[[:space:]]*\$\{\{ steps\.selection_identity\.outputs\.expected_variant \}\}' \
-    "existing-build preflight must receive the resolved identity"
-  for identity_input in \
-    'ROM_FAMILY:[[:space:]]*grapheneos' \
-    'OUTPUT_SCOPE:[[:space:]]*published' \
-    'ADDITIONALS_MAS_COMPATIBLE_SEPOLICY' \
-    'ADDITIONALS_DEBUG' \
-    'ADDITIONALS_BOOT_ANIMATION' \
-    'ADDITIONALS_AFSR' \
-    'MAGISK_VERSION:[[:space:]]*\$\{\{ steps\.resolve_version\.outputs\.magisk_version \}\}'; do
-    assert_contains "${RELEASE}" "${identity_input}" \
-      "release preflight must pass ${identity_input%%:*} to identity resolution"
-  done
-  assert_contains \
-    "${RELEASE}" \
-    'ADDITIONALS_AFSR:[[:space:]]*\$\{\{ github\.event_name == .schedule. && steps\.scheduled_config\.outputs\.afsr == .true. \|\| github\.event_name != .schedule. && inputs\.afsr \}\}' \
-    "release preflight must preserve scheduled AFSR=false"
-  assert_contains \
-    "${RELEASE}" \
-    'force_update="\$\(toml_resolve_value force_update "\$\{DEFAULT_FORCE_UPDATE\}"\)"' \
-    "scheduled configuration must resolve FORCE_UPDATE through the typed contract"
-  assert_contains \
-    "${RELEASE}" \
-    'validate_scheduled_boolean "\$\{force_update\}" "FORCE_UPDATE must be true or false"' \
-    "scheduled FORCE_UPDATE must be validated as a boolean"
-  assert_contains \
-    "${RELEASE}" \
-    'echo "FORCE_UPDATE=\$\{force_update\}"' \
-    "scheduled configuration must export FORCE_UPDATE"
-  assert_contains \
-    "${RELEASE}" \
-    'echo "force_update=\$\{force_update\}"' \
-    "scheduled configuration must expose FORCE_UPDATE to preflight"
-  assert_contains \
-    "${RELEASE}" \
-    'force_update:[[:space:]]*\$\{\{ steps\.scheduled_config\.outputs\.force_update \}\}' \
-    "preflight must expose scheduled FORCE_UPDATE as a job output"
-  assert_contains \
-    "${RELEASE}" \
-    'FORCE_UPDATE:[[:space:]]*\$\{\{ github\.event_name == .schedule. && steps\.scheduled_config\.outputs\.force_update \|\| false \}\}' \
-    "existing-build preflight must receive scheduled FORCE_UPDATE"
-  for default in \
-    'DEFAULT_DEVICE_NAME:[[:space:]]*bramble' \
-    'DEFAULT_UPDATE_CHANNEL:[[:space:]]*stable' \
-    'DEFAULT_ROOT:[[:space:]]*false' \
-    'DEFAULT_AFSR:[[:space:]]*true' \
-    'DEFAULT_MAGISK_PREINIT:[[:space:]]*sda10' \
-    'DEFAULT_BOOT_ANIMATION:[[:space:]]*false' \
-    'DEFAULT_FORCE_UPDATE:[[:space:]]*false'; do
-    assert_contains "${RELEASE}" "${default}" \
-      "scheduled configuration must retain explicit defaults"
-  done
-  assert_contains \
-    "${RELEASE}" \
-    'device-id:[[:space:]]*\$\{\{ github\.event_name == .schedule. && needs\.preflight\.outputs\.device_id \|\| inputs\.device-id \}\}' \
-    "manual device input must remain authoritative"
-  assert_contains \
-    "${RELEASE}" \
-    'boot-animation:[[:space:]]*\$\{\{ github\.event_name == .schedule. && needs\.preflight\.outputs\.boot_animation == .true. \|\| inputs\.boot-animation \|\| false \}\}' \
-    "boot animation must be forwarded with a default-off fallback"
-  assert_contains \
-    "${RELEASE}" \
-    'afsr:[[:space:]]*\$\{\{ github\.event_name == .schedule. && needs\.preflight\.outputs\.afsr == .true. \|\| github\.event_name != .schedule. && inputs\.afsr \}\}' \
-    "AFSR must be forwarded without converting scheduled false to true"
-  assert_not_contains \
-    "${RELEASE}" \
-    'boot-animation:[[:space:]]*\$\{\{ github\.event_name == .schedule. && needs\.preflight\.outputs\.boot_animation \|\| inputs\.boot-animation' \
-    "boot animation must not forward a string output as a boolean"
-  assert_contains \
-    "${RELEASE}" \
-    'root:[[:space:]]*\$\{\{ github\.event_name == .schedule. && needs\.preflight\.outputs\.root == .true. \|\| inputs\.root \}\}' \
-    "root must explicitly coerce the scheduled string output to boolean"
-  assert_not_contains \
-    "${RELEASE}" \
-    'root:[[:space:]]*\$\{\{ github\.event_name == .schedule. && needs\.preflight\.outputs\.root \|\| inputs\.root \}\}' \
-    "root must not forward a string output as a boolean"
-  assert_contains \
-    "${RELEASE}" \
-    'magisk-preinit-device:[[:space:]]*\$\{\{ github\.event_name == .schedule. && needs\.preflight\.outputs\.magisk_preinit_device' \
-    "scheduled preinit configuration must be forwarded"
-  assert_contains \
-    "${RELEASE}" \
-    'update-channel:[[:space:]]*\$\{\{ github\.event_name == .schedule. && needs\.preflight\.outputs\.update_channel' \
-    "scheduled update channel must be forwarded"
+  local loader="src/ci/load_schedule_definition.sh"
+
+  assert_contains "${RELEASE}"     'name:[[:space:]]*Load scheduled build definition'     "scheduled GrapheneOS release must load a checked-in definition"
+  assert_contains "${RELEASE}"     'if:[[:space:]]*github\.event_name == .schedule.'     "scheduled configuration must be schedule-only"
+  assert_contains "${RELEASE}"     'run:[[:space:]]*bash src/ci/load_schedule_definition\.sh'     "GrapheneOS schedule must use the shared definition loader"
+  assert_contains "${loader}"     'check_toml_env "\$\{SCHEDULE_DEFINITION\}"'     "schedule loader must use the typed TOML parser"
+  assert_contains "${loader}"     'toml_config_has "\$\{key\}"'     "schedule loader must require every declared schedule key"
+  assert_contains "${loader}"     'boot_animation="\$\(toml_resolve_value boot_animation'     "schedule loader must resolve the boot-animation selection"
+  assert_contains "${loader}"     'compatible_sepolicy_patching="\$\(toml_resolve_value compatible_sepolicy_patching'     "schedule loader must resolve compatible-SEPolicy selection"
+  assert_contains "${loader}"     'force_update="\$\(toml_resolve_value force_update'     "schedule loader must resolve FORCE_UPDATE"
+  assert_contains "${RELEASE}"     'name:[[:space:]]*Resolve expected selection identity'     "release preflight must resolve the canonical selection identity"
+  assert_contains "${RELEASE}"     'module_selection_fingerprint'     "release preflight must use the shared selection fingerprint"
+  assert_contains "${RELEASE}"     'expected_variant:[[:space:]]*\$\{\{ steps\.selection_identity\.outputs\.expected_variant \}\}'     "release preflight must expose the resolved identity"
+  assert_contains "${RELEASE}"     'EXPECTED_VARIANT:[[:space:]]*\$\{\{ steps\.selection_identity\.outputs\.expected_variant \}\}'     "existing-build preflight must receive the resolved identity"
+  assert_contains "${RELEASE}"     'force_update:[[:space:]]*\$\{\{ steps\.scheduled_config\.outputs\.force_update \}\}'     "preflight must expose scheduled FORCE_UPDATE as a job output"
+  assert_contains "${RELEASE}"     'FORCE_UPDATE:[[:space:]]*\$\{\{ github\.event_name == .schedule. && steps\.scheduled_config\.outputs\.force_update \|\| false \}\}'     "existing-build preflight must receive scheduled FORCE_UPDATE"
+  assert_contains "${RELEASE}"     'device-id:[[:space:]]*\$\{\{ github\.event_name == .schedule. && needs\.preflight\.outputs\.device_id \|\| inputs\.device-id \}\}'     "manual device input must remain authoritative"
+  assert_contains "${RELEASE}"     'boot-animation:[[:space:]]*\$\{\{ github\.event_name == .schedule. && needs\.preflight\.outputs\.boot_animation == .true. \|\| inputs\.boot-animation \|\| false \}\}'     "boot animation must be forwarded from scheduled definition or manual input"
+  assert_contains "${RELEASE}"     'compatible-sepolicy-patching:[[:space:]]*\$\{\{ github\.event_name == .schedule. && needs\.preflight\.outputs\.compatible_sepolicy_patching == .true.'     "compatible SEPolicy must be forwarded from the scheduled definition"
+  assert_contains "${RELEASE}"     'root:[[:space:]]*\$\{\{ github\.event_name == .schedule. && needs\.preflight\.outputs\.root == .true. \|\| inputs\.root \}\}'     "root must explicitly coerce the scheduled string output to boolean"
+  assert_contains "${RELEASE}"     'magisk-preinit-device:[[:space:]]*\$\{\{ github\.event_name == .schedule. && needs\.preflight\.outputs\.magisk_preinit_device'     "scheduled preinit configuration must be forwarded"
+  assert_contains "${RELEASE}"     'update-channel:[[:space:]]*\$\{\{ github\.event_name == .schedule. && needs\.preflight\.outputs\.update_channel'     "scheduled update channel must be forwarded"
 }
 
 test_module_forwarding_contract() {
   local contract input config output
+  local loader="src/ci/load_schedule_definition.sh"
 
   for contract in \
     'afsr:AFSR:afsr' \
@@ -378,13 +291,13 @@ test_module_forwarding_contract() {
     IFS=: read -r input config output <<<"${contract}"
 
     assert_contains \
-      "${RELEASE}" \
+      "${loader}" \
       "toml_resolve_value ${output}" \
-      "scheduled configuration must resolve ${config} through the typed contract"
+      "schedule loader must resolve ${config} through the typed contract"
     assert_contains \
-      "${RELEASE}" \
+      "${loader}" \
       "echo \"${output}=" \
-      "scheduled configuration must expose ${output}"
+      "schedule loader must expose ${output}"
     assert_contains \
       "${RELEASE}" \
       "steps\\.scheduled_config\\.outputs\\.${output}" \
