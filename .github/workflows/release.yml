@@ -12,6 +12,10 @@ on:
         required: false
         type: boolean
         default: false
+      root-mode:
+        required: false
+        type: string
+        default: ""
       afsr:
         required: false
         type: boolean
@@ -87,10 +91,15 @@ on:
         required: true
         default: "shiba"
       root:
-        description: Add root to the build
+        description: Add root to the build (legacy boolean; ignored when root-mode is set)
         required: false
         type: boolean
         default: true
+      root-mode:
+        description: Optional root mode override (rootless, magisk, or both)
+        required: false
+        type: string
+        default: ""
       afsr:
         description: Include AFSR executable acquisition and PATH setup
         required: false
@@ -278,6 +287,7 @@ jobs:
       always() &&
       (
         (github.event_name != 'schedule' && inputs.release-type != 'default') ||
+        (github.event_name != 'schedule' && inputs.root-mode != '') ||
         needs.preflight.outputs.should_build == 'true'
       )
     with:
@@ -285,6 +295,7 @@ jobs:
       # Scheduled builds use the checked-in shiba definition; manual inputs remain authoritative.
       device-id: ${{ github.event_name == 'schedule' && needs.preflight.outputs.device_id || inputs.device-id }}
       root: ${{ github.event_name == 'schedule' && needs.preflight.outputs.root == 'true' || inputs.root }}
+      root-mode: ${{ github.event_name == 'schedule' && '' || inputs.root-mode }}
       afsr: ${{ github.event_name == 'schedule' && needs.preflight.outputs.afsr == 'true' || github.event_name != 'schedule' && inputs.afsr }}
       magisk-preinit-device: ${{ github.event_name == 'schedule' && needs.preflight.outputs.magisk_preinit_device || inputs.magisk-preinit-device || 'sda10' }}
       update-channel: ${{ github.event_name == 'schedule' && needs.preflight.outputs.update_channel || inputs.update-channel || 'stable' }}
