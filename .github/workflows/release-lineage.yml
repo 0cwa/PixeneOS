@@ -66,6 +66,7 @@ jobs:
       rom_family: ${{ steps.definition.outputs.rom_family }}
       update_channel: ${{ steps.definition.outputs.update_channel }}
       root: ${{ steps.definition.outputs.root }}
+      root_mode: ${{ steps.definition.outputs.root_mode }}
       afsr: ${{ steps.definition.outputs.afsr }}
       magisk_preinit_device: ${{ steps.definition.outputs.magisk_preinit_device }}
       alterinstaller: ${{ steps.definition.outputs.alterinstaller }}
@@ -96,7 +97,7 @@ jobs:
       rom-family: ${{ needs.schedule_config.outputs.rom_family }}
       device-id: ${{ needs.schedule_config.outputs.device_id }}
       root: ${{ needs.schedule_config.outputs.root == 'true' }}
-      root-mode: ""
+      root-mode: ${{ needs.schedule_config.outputs.root_mode }}
       afsr: ${{ needs.schedule_config.outputs.afsr == 'true' }}
       magisk-preinit-device: ${{ needs.schedule_config.outputs.magisk_preinit_device }}
       update-channel: ${{ needs.schedule_config.outputs.update_channel }}
