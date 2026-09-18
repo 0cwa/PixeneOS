@@ -12,6 +12,10 @@ on:
         required: false
         type: boolean
         default: false
+      root-mode:
+        required: false
+        type: string
+        default: ""
       afsr:
         required: false
         type: boolean
@@ -87,10 +91,15 @@ on:
         required: true
         default: "shiba"
       root:
-        description: Add root to the build
+        description: Add root to the build (legacy boolean; ignored when root-mode is set)
         required: false
         type: boolean
         default: true
+      root-mode:
+        description: Optional root mode override (rootless, magisk, or both)
+        required: false
+        type: string
+        default: ""
       afsr:
         description: Include AFSR executable acquisition and PATH setup
         required: false
@@ -174,6 +183,7 @@ jobs:
       device_id: ${{ steps.scheduled_config.outputs.device_id }}
       update_channel: ${{ steps.scheduled_config.outputs.update_channel }}
       root: ${{ steps.scheduled_config.outputs.root }}
+      root_mode: ${{ steps.scheduled_config.outputs.root_mode }}
       afsr: ${{ steps.scheduled_config.outputs.afsr }}
       magisk_preinit_device: ${{ steps.scheduled_config.outputs.magisk_preinit_device }}
       alterinstaller: ${{ steps.scheduled_config.outputs.alterinstaller }}
@@ -185,6 +195,8 @@ jobs:
       boot_animation: ${{ steps.scheduled_config.outputs.boot_animation }}
       compatible_sepolicy_patching: ${{ steps.scheduled_config.outputs.compatible_sepolicy_patching }}
       expected_variant: ${{ steps.selection_identity.outputs.expected_variant }}
+      expected_variant_rootless: ${{ steps.selection_identity.outputs.expected_variant_rootless }}
+      expected_variant_magisk: ${{ steps.selection_identity.outputs.expected_variant_magisk }}
     steps:
       - name: Fetch shared implementation
         shell: bash
@@ -244,17 +256,45 @@ jobs:
           ADDITIONALS_MAS_COMPATIBLE_SEPOLICY: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.compatible_sepolicy_patching == 'true' || github.event_name != 'schedule' && inputs.compatible-sepolicy-patching || false }}
           ADDITIONALS_DEBUG: ${{ github.event_name != 'schedule' && inputs.allow-unauthorized-adb || false }}
           ADDITIONALS_BOOT_ANIMATION: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.boot_animation || inputs.boot-animation || false }}
+          ROOT_MODE_SCHEDULE: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.root_mode || '' }}
         run: |
           set -euo pipefail
-          identity_output=''
-          if identity_output="$(
-            source src/util_functions.sh
-            module_selection_fingerprint
-          )" && [[ "${identity_output}" =~ ^[0-9a-f]{64}$ ]]; then
-            printf 'expected_variant=%s\n' "${identity_output}" >> "${GITHUB_OUTPUT}"
+          source src/util_functions.sh
+
+          if [[ "${ROOT_MODE_SCHEDULE}" == both ]]; then
+            original_root="${ADDITIONALS[ROOT]}"
+
+            ADDITIONALS[ROOT]=false
+            rootless_identity="$(module_selection_fingerprint)" || rootless_identity=''
+            ADDITIONALS[ROOT]=true
+            magisk_identity="$(module_selection_fingerprint)" || magisk_identity=''
+            ADDITIONALS[ROOT]="${original_root}"
+
+            if [[ "${rootless_identity}" =~ ^[0-9a-f]{64}$ &&
+              "${magisk_identity}" =~ ^[0-9a-f]{64}$ ]]; then
+              {
+                printf 'expected_variant=%s\n' "${rootless_identity}"
+                printf 'expected_variant_rootless=%s\n' "${rootless_identity}"
+                printf 'expected_variant_magisk=%s\n' "${magisk_identity}"
+              } >> "${GITHUB_OUTPUT}"
+            else
+              echo "::warning::Paired selection identities could not be resolved; scheduled build will continue."
+              {
+                printf 'expected_variant=\n'
+                printf 'expected_variant_rootless=\n'
+                printf 'expected_variant_magisk=\n'
+              } >> "${GITHUB_OUTPUT}"
+            fi
           else
-            echo "::warning::Selection identity could not be resolved; existing-build preflight will continue with a build."
-            printf 'expected_variant=\n' >> "${GITHUB_OUTPUT}"
+            identity_output="$(module_selection_fingerprint)" || identity_output=''
+            if [[ "${identity_output}" =~ ^[0-9a-f]{64}$ ]]; then
+              printf 'expected_variant=%s\n' "${identity_output}" >> "${GITHUB_OUTPUT}"
+            else
+              echo "::warning::Selection identity could not be resolved; existing-build preflight will continue with a build."
+              printf 'expected_variant=\n' >> "${GITHUB_OUTPUT}"
+            fi
+            printf 'expected_variant_rootless=\n' >> "${GITHUB_OUTPUT}"
+            printf 'expected_variant_magisk=\n' >> "${GITHUB_OUTPUT}"
           fi
 
       - name: Check existing release assets
@@ -268,8 +308,16 @@ jobs:
           ROM_FAMILY: grapheneos
           OUTPUT_SCOPE: published
           EXPECTED_VARIANT: ${{ steps.selection_identity.outputs.expected_variant }}
+          EXPECTED_VARIANT_ROOTLESS: ${{ steps.selection_identity.outputs.expected_variant_rootless }}
+          EXPECTED_VARIANT_MAGISK: ${{ steps.selection_identity.outputs.expected_variant_magisk }}
+          ROOT_MODE: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.root_mode || '' }}
           FORCE_UPDATE: ${{ github.event_name == 'schedule' && steps.scheduled_config.outputs.force_update || false }}
-        run: src/ci/check_existing_build.sh
+        run: |
+          if [[ "${ROOT_MODE}" == both ]]; then
+            bash src/ci/check_existing_pair.sh
+          else
+            bash src/ci/check_existing_build.sh
+          fi
 
   build:
     uses: ./.github/workflows/build-rom.yml
@@ -278,6 +326,7 @@ jobs:
       always() &&
       (
         (github.event_name != 'schedule' && inputs.release-type != 'default') ||
+        (github.event_name != 'schedule' && inputs.root-mode != '') ||
         needs.preflight.outputs.should_build == 'true'
       )
     with:
@@ -285,6 +334,7 @@ jobs:
       # Scheduled builds use the checked-in shiba definition; manual inputs remain authoritative.
       device-id: ${{ github.event_name == 'schedule' && needs.preflight.outputs.device_id || inputs.device-id }}
       root: ${{ github.event_name == 'schedule' && needs.preflight.outputs.root == 'true' || inputs.root }}
+      root-mode: ${{ github.event_name == 'schedule' && needs.preflight.outputs.root_mode || inputs.root-mode }}
       afsr: ${{ github.event_name == 'schedule' && needs.preflight.outputs.afsr == 'true' || github.event_name != 'schedule' && inputs.afsr }}
       magisk-preinit-device: ${{ github.event_name == 'schedule' && needs.preflight.outputs.magisk_preinit_device || inputs.magisk-preinit-device || 'sda10' }}
       update-channel: ${{ github.event_name == 'schedule' && needs.preflight.outputs.update_channel || inputs.update-channel || 'stable' }}

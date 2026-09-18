@@ -10,10 +10,15 @@ on:
         required: true
         default: "pdx235"
       root:
-        description: Add root to the build
+        description: Add root to the build (legacy boolean; ignored when root-mode is set)
         required: false
         type: boolean
         default: true
+      root-mode:
+        description: Optional root mode override (rootless, magisk, or both)
+        required: false
+        type: string
+        default: ""
       magisk-preinit-device:
         description: Magisk preinit device
         required: false
@@ -61,6 +66,7 @@ jobs:
       rom_family: ${{ steps.definition.outputs.rom_family }}
       update_channel: ${{ steps.definition.outputs.update_channel }}
       root: ${{ steps.definition.outputs.root }}
+      root_mode: ${{ steps.definition.outputs.root_mode }}
       afsr: ${{ steps.definition.outputs.afsr }}
       magisk_preinit_device: ${{ steps.definition.outputs.magisk_preinit_device }}
       alterinstaller: ${{ steps.definition.outputs.alterinstaller }}
@@ -91,6 +97,7 @@ jobs:
       rom-family: ${{ needs.schedule_config.outputs.rom_family }}
       device-id: ${{ needs.schedule_config.outputs.device_id }}
       root: ${{ needs.schedule_config.outputs.root == 'true' }}
+      root-mode: ${{ needs.schedule_config.outputs.root_mode }}
       afsr: ${{ needs.schedule_config.outputs.afsr == 'true' }}
       magisk-preinit-device: ${{ needs.schedule_config.outputs.magisk_preinit_device }}
       update-channel: ${{ needs.schedule_config.outputs.update_channel }}
@@ -114,6 +121,7 @@ jobs:
       rom-family: lineageos
       device-id: ${{ inputs.device-id }}
       root: ${{ inputs.root }}
+      root-mode: ${{ inputs.root-mode }}
       magisk-preinit-device: ${{ inputs.magisk-preinit-device }}
       update-channel: ${{ inputs.update-channel }}
       compatible-sepolicy-patching: ${{ inputs.compatible-sepolicy-patching }}

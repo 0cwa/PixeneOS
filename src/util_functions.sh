@@ -26,6 +26,44 @@ function is_locked_executable_tool() {
   return 1
 }
 
+function resolve_root_mode() {
+  local requested="${ROOT_MODE:-}"
+
+  if [[ -z "${requested}" ]]; then
+    case "${ADDITIONALS[ROOT]}" in
+      true) requested='magisk' ;;
+      false) requested='rootless' ;;
+      *)
+        echo "Error: legacy ROOT selection must be true or false." >&2
+        return 1
+        ;;
+    esac
+  fi
+
+  case "${requested}" in
+    rootless|magisk|both) ;;
+    *)
+      echo "Error: ROOT_MODE must be rootless, magisk, or both." >&2
+      return 1
+      ;;
+  esac
+
+  if [[ "${requested}" == 'magisk' || "${requested}" == 'both' ]]; then
+    if [[ -z "${MAGISK[PREINIT]}" ]]; then
+      echo "Error: Magisk root modes require MAGISK_PREINIT." >&2
+      return 1
+    fi
+  fi
+
+  RESOLVED_ROOT_MODE="${requested}"
+  export RESOLVED_ROOT_MODE
+}
+
+function root_mode_includes_magisk() {
+  resolve_root_mode >/dev/null || return 1
+  [[ "${RESOLVED_ROOT_MODE}" == 'magisk' || "${RESOLVED_ROOT_MODE}" == 'both' ]]
+}
+
 # Function to check and download the dependencies
 # This function checks for the required tools and downloads them if not found depending on the configuration done in the declarations file
 function check_and_download_dependencies() {
@@ -102,8 +140,9 @@ function check_and_download_dependencies() {
     done
   done
 
-  # Retry logic for magisk
-  if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
+  # Retry logic for magisk. ROOT_MODE=both downloads it once for the
+  # secondary output while preserving the legacy ROOT boolean path.
+  if root_mode_includes_magisk; then
     RETRY_COUNT=0 # Reset retry count for magisk
     while true; do
       # Magisk is an exception as it is an APK and hence we do the get call directly and verify
@@ -419,6 +458,8 @@ function generate_keys() {
 # Leverages `my-avbroot-setup` to patch the OTA
 # This function does a lot of things before patching the OTA
 function patch_ota() {
+  resolve_root_mode || return 1
+
   if [[ -z "${ROM_PROFILE[PROVIDER]:-}" ]]; then
     resolve_rom_profile || return 1
   fi
@@ -458,10 +499,25 @@ function patch_ota() {
   fi
 
   # Legacy output markers do not encode a locked module selection. Never reuse
-  # one for an enabled F-Droid build.
-  if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" != 'true' ]] &&
-    [[ -f "${OUTPUTS[PATCHED_OTA]}" ]]; then
-    echo -e "File ${OUTPUTS[PATCHED_OTA]} already exists locally. Patch skipped."
+  # one for an enabled F-Droid build. A dual build is reusable only when both
+  # OTA triplets and both per-flavor update-info files are already complete.
+  local outputs_ready=false
+  if [[ "${RESOLVED_ROOT_MODE}" == 'both' ]]; then
+    if [[ -f "${OUTPUTS[PATCHED_OTA_ROOTLESS]}" &&
+      -f "${OUTPUTS[PATCHED_OTA_ROOTLESS]}.csig" &&
+      -f "${OUTPUTS[PATCHED_OTA_MAGISK]}" &&
+      -f "${OUTPUTS[PATCHED_OTA_MAGISK]}.csig" &&
+      -f "${OUTPUTS[OTA_METADATA_ROOTLESS]}" &&
+      -f "${OUTPUTS[OTA_METADATA_MAGISK]}" ]]; then
+      outputs_ready=true
+    fi
+  elif [[ -f "${OUTPUTS[PATCHED_OTA]}" ]]; then
+    outputs_ready=true
+  fi
+
+  if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" != 'true' &&
+    "${outputs_ready}" == true ]]; then
+    echo -e "Requested OTA output already exists locally. Patch skipped."
   else
     echo -e "Patching OTA..."
     local args=()
@@ -524,22 +580,69 @@ function patch_ota() {
       echo -e "Compatible SEPolicy Flag is NOT enabled. Continuing...\n"
     fi
 
-    # Add support for Magisk if root config is enabled
-    if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
-      echo -e "Magisk is enabled. Modifying the setup script...\n"
-      args+=("--patch-arg=--magisk" "--patch-arg" "${magisk_path}")
-      args+=("--patch-arg=--magisk-preinit-device" "--patch-arg" "${MAGISK[PREINIT]}")
-    else
-      args+=("--patch-arg=--rootless")
-      echo -e "Magisk is not enabled. Skipping...\n"
-    fi
+    # Root selection is the only part of the helper patch plan that differs
+    # between the two outputs. ROOT_MODE=both keeps rootless as the primary
+    # output and asks the helper for a Magisk secondary output from the exact
+    # same prepared replacement images.
+    case "${RESOLVED_ROOT_MODE}" in
+      magisk)
+        echo -e "Magisk is enabled. Modifying the setup script...\n"
+        args+=("--patch-arg=--magisk" "--patch-arg" "${magisk_path}")
+        args+=("--patch-arg=--magisk-preinit-device" "--patch-arg" "${MAGISK[PREINIT]}")
+        ;;
+      rootless)
+        args+=("--patch-arg=--rootless")
+        echo -e "Magisk is not enabled. Continuing rootless...\n"
+        ;;
+      both)
+        args+=("--patch-arg=--rootless")
+        args+=("--skip-custota-tool")
+        args+=("--secondary-output" "${OUTPUTS[PATCHED_OTA_MAGISK]}")
+        args+=("--secondary-patch-arg=--magisk")
+        args+=("--secondary-patch-arg" "${magisk_path}")
+        args+=("--secondary-patch-arg=--magisk-preinit-device")
+        args+=("--secondary-patch-arg" "${MAGISK[PREINIT]}")
+        ;;
+    esac
 
     # Python command to run the patch script
     python "${my_avbroot_setup}/patch.py" "${args[@]}" || return 1
+
+    if [[ "${RESOLVED_ROOT_MODE}" == 'both' ]]; then
+      generate_custota_variant_sidecars         "${OUTPUTS[PATCHED_OTA_ROOTLESS]}"         "${OUTPUTS[OTA_METADATA_ROOTLESS]}" || return 1
+      generate_custota_variant_sidecars         "${OUTPUTS[PATCHED_OTA_MAGISK]}"         "${OUTPUTS[OTA_METADATA_MAGISK]}" || return 1
+    fi
   fi
 
   # Deactivate the virtual environment after patching the OTA
   deactivate
+}
+
+function release_location_for_output() {
+  local artifact_name="${1}"
+
+  resolve_release_repository
+  if [[ -n "${PIXENEOS_RELEASE_BASE_URL}" ]]; then
+    printf '%s/%s' "${PIXENEOS_RELEASE_BASE_URL%/}" "${artifact_name}"
+  else
+    printf '%s/%s/%s/releases/download/%s/%s'       "${DOMAIN}"       "${PIXENEOS_RELEASE_OWNER}"       "${PIXENEOS_RELEASE_REPOSITORY}"       "${VERSION[GRAPHENEOS]}"       "${artifact_name}"
+  fi
+}
+
+function generate_custota_variant_sidecars() {
+  local ota_path="${1}"
+  local metadata_path="${2}"
+  local location
+
+  [[ -f "${ota_path}" ]] || {
+    echo "Error: missing OTA for Custota sidecars: ${ota_path}" >&2
+    return 1
+  }
+  location="$(release_location_for_output "${ota_path}")" || return 1
+
+  run_executable_tool custota-tool gen-csig     --input "${ota_path}"     --key "${KEYS[OTA]}"     --cert "${KEYS[CERT_OTA]}"     --passphrase-env-var PASSPHRASE_OTA || return 1
+
+  run_executable_tool custota-tool gen-update-info     --file "${metadata_path}"     --location "${location}"
 }
 
 function resolve_release_repository() {
@@ -873,21 +976,83 @@ function make_directories() {
   chmod 0700 -- "${WORKDIR}" "${WORKDIR}/.keys" "${WORKDIR}/tools"
 }
 
-function generate_ota_info() {
-  validate_device_name || return 1
+function _generate_ota_variant_info() {
+  local variant="${1}"
+  local original_root="${ADDITIONALS[ROOT]}"
+  local flavor debug_suffix=''
 
-  # Detect build flavor
-  local flavor=$([[ ${ADDITIONALS[ROOT]} == 'true' ]] && echo "magisk-${VERSION[MAGISK]}" || echo "rootless")
-  local debug_suffix=""
+  case "${variant}" in
+    rootless)
+      ADDITIONALS[ROOT]=false
+      flavor='rootless'
+      ;;
+    magisk)
+      ADDITIONALS[ROOT]=true
+      flavor="magisk-${VERSION[MAGISK]}"
+      ;;
+    *)
+      echo "Error: unsupported concrete root variant: ${variant}" >&2
+      return 1
+      ;;
+  esac
 
   if [[ "${ADDITIONALS[DEBUG]}" == 'true' ]]; then
-    debug_suffix="-debug-adb"
+    debug_suffix='-debug-adb'
   fi
 
-  module_selection_fingerprint >/dev/null || return 1
-  # Debug builds are intentionally labeled. The stable selection fingerprint
-  # prevents otherwise identical ROM/profile variants from colliding.
-  OUTPUTS[PATCHED_OTA]="${DEVICE_NAME}-${VERSION[GRAPHENEOS]}-${flavor}${debug_suffix}-${MODULE_SELECTION_FINGERPRINT}-$(git rev-parse --short HEAD)$(dirty_suffix).zip"
+  if ! module_selection_fingerprint >/dev/null; then
+    ADDITIONALS[ROOT]="${original_root}"
+    return 1
+  fi
+
+  VARIANT_SELECTION_FINGERPRINT="${MODULE_SELECTION_FINGERPRINT}"
+  VARIANT_PATCHED_OTA="${DEVICE_NAME}-${VERSION[GRAPHENEOS]}-${flavor}${debug_suffix}-${VARIANT_SELECTION_FINGERPRINT}-$(git rev-parse --short HEAD)$(dirty_suffix).zip"
+  ADDITIONALS[ROOT]="${original_root}"
+}
+
+function generate_ota_info() {
+  validate_device_name || return 1
+  resolve_root_mode || return 1
+
+  OUTPUTS[PATCHED_OTA_ROOTLESS]=''
+  OUTPUTS[PATCHED_OTA_MAGISK]=''
+  OUTPUTS[OTA_METADATA_ROOTLESS]=''
+  OUTPUTS[OTA_METADATA_MAGISK]=''
+  MODULE_SELECTION_FINGERPRINT_ROOTLESS=''
+  MODULE_SELECTION_FINGERPRINT_MAGISK=''
+
+  case "${RESOLVED_ROOT_MODE}" in
+    rootless)
+      _generate_ota_variant_info rootless || return 1
+      OUTPUTS[PATCHED_OTA]="${VARIANT_PATCHED_OTA}"
+      OUTPUTS[PATCHED_OTA_ROOTLESS]="${VARIANT_PATCHED_OTA}"
+      MODULE_SELECTION_FINGERPRINT="${VARIANT_SELECTION_FINGERPRINT}"
+      MODULE_SELECTION_FINGERPRINT_ROOTLESS="${VARIANT_SELECTION_FINGERPRINT}"
+      ;;
+    magisk)
+      _generate_ota_variant_info magisk || return 1
+      OUTPUTS[PATCHED_OTA]="${VARIANT_PATCHED_OTA}"
+      OUTPUTS[PATCHED_OTA_MAGISK]="${VARIANT_PATCHED_OTA}"
+      MODULE_SELECTION_FINGERPRINT="${VARIANT_SELECTION_FINGERPRINT}"
+      MODULE_SELECTION_FINGERPRINT_MAGISK="${VARIANT_SELECTION_FINGERPRINT}"
+      ;;
+    both)
+      _generate_ota_variant_info rootless || return 1
+      OUTPUTS[PATCHED_OTA]="${VARIANT_PATCHED_OTA}"
+      OUTPUTS[PATCHED_OTA_ROOTLESS]="${VARIANT_PATCHED_OTA}"
+      MODULE_SELECTION_FINGERPRINT="${VARIANT_SELECTION_FINGERPRINT}"
+      MODULE_SELECTION_FINGERPRINT_ROOTLESS="${VARIANT_SELECTION_FINGERPRINT}"
+
+      _generate_ota_variant_info magisk || return 1
+      OUTPUTS[PATCHED_OTA_MAGISK]="${VARIANT_PATCHED_OTA}"
+      MODULE_SELECTION_FINGERPRINT_MAGISK="${VARIANT_SELECTION_FINGERPRINT}"
+
+      # Keep the legacy singular values bound to the primary/rootless output.
+      MODULE_SELECTION_FINGERPRINT="${MODULE_SELECTION_FINGERPRINT_ROOTLESS}"
+      OUTPUTS[OTA_METADATA_ROOTLESS]="${DEVICE_NAME}-rootless.json"
+      OUTPUTS[OTA_METADATA_MAGISK]="${DEVICE_NAME}-magisk.json"
+      ;;
+  esac
 }
 
 function _toml_trim() {

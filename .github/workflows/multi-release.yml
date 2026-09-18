@@ -7,10 +7,15 @@ on:
         description: 'Comma-separated device code names. For rooted builds append the Magisk preinit device, for example "bramble:sda10, shiba:sda10". Leave empty to use DEVICES from env.toml.'
         required: false
       root:
-        description: Add root to all builds
+        description: Add root to all builds (legacy boolean; ignored when root-mode is set)
         required: false
         type: boolean
         default: false
+      root-mode:
+        description: Optional root mode override for all builds (rootless, magisk, or both)
+        required: false
+        type: string
+        default: ""
       afsr:
         description: Include AFSR
         required: false
@@ -93,6 +98,7 @@ jobs:
         env:
           DEVICES_INPUT: ${{ inputs.devices }}
           ROOT_INPUT: ${{ inputs.root }}
+          ROOT_MODE_INPUT: ${{ inputs.root-mode }}
         run: |
           set -euo pipefail
           devices_raw="${DEVICES_INPUT}"
@@ -123,9 +129,16 @@ jobs:
             exit 1
           }
 
-          if [[ "${ROOT_INPUT}" == "true" ]] &&
+          case "${ROOT_MODE_INPUT}" in
+            ''|rootless|magisk|both) ;;
+            *) echo "::error::root-mode must be rootless, magisk, or both"; exit 1 ;;
+          esac
+
+          if [[ "${ROOT_INPUT}" == "true" ||
+            "${ROOT_MODE_INPUT}" == "magisk" ||
+            "${ROOT_MODE_INPUT}" == "both" ]] &&
              jq -e 'any(.[]; (.preinit | length) == 0)' <<<"${devices}" >/dev/null; then
-            echo "::error::Rooted multi-device builds require device:MAGISK_PREINIT for every entry."
+            echo "::error::Magisk multi-device builds require device:MAGISK_PREINIT for every entry."
             exit 1
           fi
 
@@ -141,6 +154,7 @@ jobs:
     with:
       device-id: ${{ matrix.target.device }}
       root: ${{ inputs.root }}
+      root-mode: ${{ inputs.root-mode }}
       afsr: ${{ inputs.afsr }}
       magisk-preinit-device: ${{ matrix.target.preinit }}
       update-channel: ${{ inputs.update-channel }}

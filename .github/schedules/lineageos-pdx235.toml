@@ -5,6 +5,7 @@ ROM_FAMILY = "lineageos"
 
 [build]
 ROOT = false
+ROOT_MODE = "both"
 MAGISK_PREINIT = "sda47"
 'ADDITIONALS[AFSR]' = true
 'ADDITIONALS[ALTERINSTALLER]' = true
