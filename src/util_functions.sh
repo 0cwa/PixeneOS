@@ -55,13 +55,13 @@ function resolve_root_mode() {
     fi
   fi
 
-  ROOT_MODE="${requested}"
-  export ROOT_MODE
+  RESOLVED_ROOT_MODE="${requested}"
+  export RESOLVED_ROOT_MODE
 }
 
 function root_mode_includes_magisk() {
   resolve_root_mode >/dev/null || return 1
-  [[ "${ROOT_MODE}" == 'magisk' || "${ROOT_MODE}" == 'both' ]]
+  [[ "${RESOLVED_ROOT_MODE}" == 'magisk' || "${RESOLVED_ROOT_MODE}" == 'both' ]]
 }
 
 # Function to check and download the dependencies
@@ -502,7 +502,7 @@ function patch_ota() {
   # one for an enabled F-Droid build. A dual build is reusable only when both
   # OTA triplets and both per-flavor update-info files are already complete.
   local outputs_ready=false
-  if [[ "${ROOT_MODE}" == 'both' ]]; then
+  if [[ "${RESOLVED_ROOT_MODE}" == 'both' ]]; then
     if [[ -f "${OUTPUTS[PATCHED_OTA_ROOTLESS]}" &&
       -f "${OUTPUTS[PATCHED_OTA_ROOTLESS]}.csig" &&
       -f "${OUTPUTS[PATCHED_OTA_MAGISK]}" &&
@@ -584,7 +584,7 @@ function patch_ota() {
     # between the two outputs. ROOT_MODE=both keeps rootless as the primary
     # output and asks the helper for a Magisk secondary output from the exact
     # same prepared replacement images.
-    case "${ROOT_MODE}" in
+    case "${RESOLVED_ROOT_MODE}" in
       magisk)
         echo -e "Magisk is enabled. Modifying the setup script...\n"
         args+=("--patch-arg=--magisk" "--patch-arg" "${magisk_path}")
@@ -608,7 +608,7 @@ function patch_ota() {
     # Python command to run the patch script
     python "${my_avbroot_setup}/patch.py" "${args[@]}" || return 1
 
-    if [[ "${ROOT_MODE}" == 'both' ]]; then
+    if [[ "${RESOLVED_ROOT_MODE}" == 'both' ]]; then
       generate_custota_variant_sidecars         "${OUTPUTS[PATCHED_OTA_ROOTLESS]}"         "${OUTPUTS[OTA_METADATA_ROOTLESS]}" || return 1
       generate_custota_variant_sidecars         "${OUTPUTS[PATCHED_OTA_MAGISK]}"         "${OUTPUTS[OTA_METADATA_MAGISK]}" || return 1
     fi
@@ -1021,7 +1021,7 @@ function generate_ota_info() {
   MODULE_SELECTION_FINGERPRINT_ROOTLESS=''
   MODULE_SELECTION_FINGERPRINT_MAGISK=''
 
-  case "${ROOT_MODE}" in
+  case "${RESOLVED_ROOT_MODE}" in
     rootless)
       _generate_ota_variant_info rootless || return 1
       OUTPUTS[PATCHED_OTA]="${VARIANT_PATCHED_OTA}"
