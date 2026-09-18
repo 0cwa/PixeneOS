@@ -5,6 +5,7 @@ ROM_FAMILY = "grapheneos"
 
 [build]
 ROOT = false
+ROOT_MODE = "both"
 MAGISK_PREINIT = "sda10"
 'ADDITIONALS[AFSR]' = true
 'ADDITIONALS[ALTERINSTALLER]' = true
