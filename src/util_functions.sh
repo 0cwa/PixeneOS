@@ -337,8 +337,11 @@ function create_and_make_release() {
     check_and_download_dependencies
   fi
 
+  # Reject a stale or unexpected helper checkout before downloading a large OTA.
+  helper_repository_preflight || return 1
+
   # Calls the download_ota function to download the OTA if not found
-  download_ota
+  download_ota || return 1
   # Calls the create_ota function to create the OTA
   create_ota
 }
@@ -347,9 +350,12 @@ function create_ota() {
   [[ "${CLEANUP}" != 'true' ]] && trap cleanup EXIT ERR
 
   # Generate output file names
-  generate_ota_info
-  # Setup environment variables and paths
-  env_setup
+  generate_ota_info || return 1
+  # Setup environment variables, apply the pinned compatibility transform, and
+  # install the helper's Python dependencies.
+  env_setup || return 1
+  # Smoke-test the transformed helper before touching the OTA.
+  helper_contract_preflight || return 1
   # Patch OTA with avbroot and afsr by leveraging my-avbroot-setup
   patch_ota
 }
@@ -572,6 +578,35 @@ function my_avbroot_setup() {
     "${helper_root}" \
     "${location_path}" \
     "${VERSION[AVBROOT_SETUP]}"
+}
+
+# Fail early when the helper checkout is not the exact revision PixeneOS pins.
+# The compatibility transformer performs the stronger origin/status/source-shape
+# validation later; this cheap check intentionally runs before OTA acquisition.
+function helper_repository_preflight() {
+  local helper_root="${WORKDIR}/tools/my-avbroot-setup"
+  local actual
+
+  actual="$(git -C "${helper_root}" rev-parse --verify 'HEAD^{commit}' 2>/dev/null)" || {
+    echo "Error: helper repository is missing or has no commit: ${helper_root}" >&2
+    return 1
+  }
+
+  if [[ "${actual}" != "${VERSION[AVBROOT_SETUP]}" ]]; then
+    echo "Error: helper contract mismatch: expected ${VERSION[AVBROOT_SETUP]}, got ${actual}" >&2
+    return 1
+  fi
+}
+
+# Run after env_setup: by this point the fail-closed compatibility transform and
+# pyproject dependencies are in place, so --help exercises the effective helper.
+function helper_contract_preflight() {
+  local helper_root="${WORKDIR}/tools/my-avbroot-setup"
+
+  if ! python "${helper_root}/patch.py" --help >/dev/null 2>&1; then
+    echo "Error: helper patch.py contract smoke check failed" >&2
+    return 1
+  fi
 }
 
 # Function to setup the environment variables and paths for patching the OTA
