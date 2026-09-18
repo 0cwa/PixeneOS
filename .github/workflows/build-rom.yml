@@ -12,6 +12,10 @@ on:
       root:
         required: true
         type: boolean
+      root-mode:
+        required: false
+        type: string
+        default: ""
       afsr:
         required: false
         type: boolean
@@ -90,6 +94,7 @@ env:
   RUSTUP_MAX_RETRIES: 10
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   RELEASE_TYPE: ${{ inputs.release-type }}
+  ROOT_MODE: ${{ inputs.root-mode }}
   ADDITIONALS_AFSR: ${{ inputs.afsr }}
   ADDITIONALS_ALTERINSTALLER: ${{ inputs.alterinstaller }}
   ADDITIONALS_BCR: ${{ inputs.bcr }}
@@ -116,11 +121,26 @@ jobs:
           ADDITIONALS_MAS_COMPATIBLE_SEPOLICY: ${{ inputs.compatible-sepolicy-patching }}
           ADDITIONALS_ROOT: ${{ inputs.root }}
           MAGISK_PREINIT_REQUEST: ${{ inputs.magisk-preinit-device }}
+          ROOT_MODE_INPUT: ${{ inputs.root-mode }}
         run: |
-          if [[ "${ADDITIONALS_ROOT}" == "true" && -z "${MAGISK_PREINIT_REQUEST}" ]]; then
-            echo "::error::magisk-preinit-device is required for rooted builds"
+          root_mode="${ROOT_MODE_INPUT}"
+          if [[ -z "${root_mode}" ]]; then
+            if [[ "${ADDITIONALS_ROOT}" == "true" ]]; then
+              root_mode=magisk
+            else
+              root_mode=rootless
+            fi
+          fi
+          case "${root_mode}" in
+            rootless|magisk|both) ;;
+            *) echo "::error::root-mode must be rootless, magisk, or both"; exit 1 ;;
+          esac
+          if [[ ("${root_mode}" == "magisk" || "${root_mode}" == "both") &&
+            -z "${MAGISK_PREINIT_REQUEST}" ]]; then
+            echo "::error::magisk-preinit-device is required for Magisk root modes"
             exit 1
           fi
+          echo "ROOT_MODE=${root_mode}" >> "${GITHUB_ENV}"
           case "${RELEASE_TYPE}" in
             default|build-only|force-publish) ;;
             *) echo "::error::Unknown release type"; exit 1 ;;
@@ -192,28 +212,39 @@ jobs:
             echo "GRAPHENEOS_OTA_TARGET=${GRAPHENEOS[OTA_TARGET]}"
             echo "GRAPHENEOS_VERSION=${VERSION[GRAPHENEOS]}"
             echo "MODULE_SELECTION_FINGERPRINT=${MODULE_SELECTION_FINGERPRINT}"
+            echo "MODULE_SELECTION_FINGERPRINT_ROOTLESS=${MODULE_SELECTION_FINGERPRINT_ROOTLESS}"
+            echo "MODULE_SELECTION_FINGERPRINT_MAGISK=${MODULE_SELECTION_FINGERPRINT_MAGISK}"
             echo "OUTPUTS_PATCHED_OTA=${OUTPUTS[PATCHED_OTA]}"
+            echo "OUTPUTS_PATCHED_OTA_ROOTLESS=${OUTPUTS[PATCHED_OTA_ROOTLESS]}"
+            echo "OUTPUTS_PATCHED_OTA_MAGISK=${OUTPUTS[PATCHED_OTA_MAGISK]}"
+            echo "OTA_METADATA_ROOTLESS=${OUTPUTS[OTA_METADATA_ROOTLESS]}"
+            echo "OTA_METADATA_MAGISK=${OUTPUTS[OTA_METADATA_MAGISK]}"
+            echo "ROOT_MODE_RESOLVED=${ROOT_MODE}"
             echo "ROM_PROFILE_PROVIDER=${ROM_PROFILE[PROVIDER]}"
             echo "WORKDIR=${WORKDIR}"
           } >> "${GITHUB_ENV}"
-          if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
-            echo 'ROM_FLAVOR=magisk' >> "${GITHUB_ENV}"
-          else
-            echo 'ROM_FLAVOR=rootless' >> "${GITHUB_ENV}"
-          fi
+          case "${ROOT_MODE}" in
+            magisk) echo 'ROM_FLAVOR=magisk' >> "${GITHUB_ENV}" ;;
+            rootless) echo 'ROM_FLAVOR=rootless' >> "${GITHUB_ENV}" ;;
+            both) echo 'ROM_FLAVOR=both' >> "${GITHUB_ENV}" ;;
+          esac
 
       - name: Record build metadata
         shell: bash
         run: |
-          selection_metadata="${OUTPUTS_PATCHED_OTA}.selection.json"
-          python3 - \
-            "${selection_metadata}" \
-            "${OUTPUTS_PATCHED_OTA}" \
-            "${ROM_FAMILY}" \
-            "${DEVICE_NAME}" \
-            "${GRAPHENEOS_VERSION}" \
-            "${MODULE_SELECTION_FINGERPRINT}" \
-            "${OUTPUT_SCOPE}" <<'PY'
+          record_selection_metadata() {
+            local artifact_name="${1}"
+            local fingerprint="${2}"
+            local env_name="${3}"
+            local selection_metadata="${artifact_name}.selection.json"
+            python3 - \
+              "${selection_metadata}" \
+              "${artifact_name}" \
+              "${ROM_FAMILY}" \
+              "${DEVICE_NAME}" \
+              "${GRAPHENEOS_VERSION}" \
+              "${fingerprint}" \
+              "${OUTPUT_SCOPE}" <<'PY'
           import json
           import pathlib
           import sys
@@ -233,11 +264,35 @@ jobs:
               encoding="utf-8",
           )
           PY
-          echo "SELECTION_METADATA=${selection_metadata}" >> "${GITHUB_ENV}"
+            echo "${env_name}=${selection_metadata}" >> "${GITHUB_ENV}"
+          }
+
+          if [[ "${ROOT_MODE_RESOLVED}" == both ]]; then
+            record_selection_metadata \
+              "${OUTPUTS_PATCHED_OTA_ROOTLESS}" \
+              "${MODULE_SELECTION_FINGERPRINT_ROOTLESS}" \
+              SELECTION_METADATA_ROOTLESS
+            record_selection_metadata \
+              "${OUTPUTS_PATCHED_OTA_MAGISK}" \
+              "${MODULE_SELECTION_FINGERPRINT_MAGISK}" \
+              SELECTION_METADATA_MAGISK
+          else
+            record_selection_metadata \
+              "${OUTPUTS_PATCHED_OTA}" \
+              "${MODULE_SELECTION_FINGERPRINT}" \
+              SELECTION_METADATA
+          fi
+
           {
             echo "ROM family: ${ROM_FAMILY}"
             echo "Device: ${DEVICE_NAME}"
-            echo "Selection fingerprint: ${MODULE_SELECTION_FINGERPRINT}"
+            echo "Root mode: ${ROOT_MODE_RESOLVED}"
+            if [[ "${ROOT_MODE_RESOLVED}" == both ]]; then
+              echo "Rootless selection fingerprint: ${MODULE_SELECTION_FINGERPRINT_ROOTLESS}"
+              echo "Magisk selection fingerprint: ${MODULE_SELECTION_FINGERPRINT_MAGISK}"
+            else
+              echo "Selection fingerprint: ${MODULE_SELECTION_FINGERPRINT}"
+            fi
             echo "Output scope: ${OUTPUT_SCOPE}"
           } >> "${GITHUB_STEP_SUMMARY}"
 
@@ -262,11 +317,17 @@ jobs:
           {
             echo "ROM family: ${ROM_FAMILY}"
             echo "Device: ${DEVICE_NAME}"
-            echo "Module-selection fingerprint: ${MODULE_SELECTION_FINGERPRINT}"
+            echo "Root mode: ${ROOT_MODE_RESOLVED}"
+            if [[ "${ROOT_MODE_RESOLVED}" == both ]]; then
+              echo "Rootless module-selection fingerprint: ${MODULE_SELECTION_FINGERPRINT_ROOTLESS}"
+              echo "Magisk module-selection fingerprint: ${MODULE_SELECTION_FINGERPRINT_MAGISK}"
+            else
+              echo "Module-selection fingerprint: ${MODULE_SELECTION_FINGERPRINT}"
+            fi
           } > "${GITHUB_WORKSPACE}-CHANGELOG.txt"
 
       - name: Publish GitHub release
-        if: inputs.publish && inputs.release-type != 'build-only'
+        if: inputs.publish && inputs.release-type != 'build-only' && env.ROOT_MODE_RESOLVED != 'both'
         uses: softprops/action-gh-release@v3
         with:
           body_path: ${{ github.workspace }}-CHANGELOG.txt
@@ -277,8 +338,23 @@ jobs:
           name: ${{ env.GRAPHENEOS_VERSION }}
           tag_name: ${{ env.GRAPHENEOS_VERSION }}
 
+      - name: Publish paired GitHub release assets
+        if: inputs.publish && inputs.release-type != 'build-only' && env.ROOT_MODE_RESOLVED == 'both'
+        uses: softprops/action-gh-release@v3
+        with:
+          body_path: ${{ github.workspace }}-CHANGELOG.txt
+          files: |
+            ${{ env.OUTPUTS_PATCHED_OTA_ROOTLESS }}
+            ${{ env.OUTPUTS_PATCHED_OTA_ROOTLESS }}.csig
+            ${{ env.SELECTION_METADATA_ROOTLESS }}
+            ${{ env.OUTPUTS_PATCHED_OTA_MAGISK }}
+            ${{ env.OUTPUTS_PATCHED_OTA_MAGISK }}.csig
+            ${{ env.SELECTION_METADATA_MAGISK }}
+          name: ${{ env.GRAPHENEOS_VERSION }}
+          tag_name: ${{ env.GRAPHENEOS_VERSION }}
+
       - name: Remove superseded release assets
-        if: inputs.publish && inputs.release-type != 'build-only'
+        if: inputs.publish && inputs.release-type != 'build-only' && env.ROOT_MODE_RESOLVED != 'both'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -286,8 +362,21 @@ jobs:
           SELECTION_METADATA_PATH: ${{ env.SELECTION_METADATA }}
         run: bash src/ci/remove_superseded_assets.sh
 
+      - name: Remove superseded paired release assets
+        if: inputs.publish && inputs.release-type != 'build-only' && env.ROOT_MODE_RESOLVED == 'both'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          OTA_ARTIFACT_PATH="${OUTPUTS_PATCHED_OTA_ROOTLESS}" \
+          SELECTION_METADATA_PATH="${SELECTION_METADATA_ROOTLESS}" \
+            bash src/ci/remove_superseded_assets.sh
+          OTA_ARTIFACT_PATH="${OUTPUTS_PATCHED_OTA_MAGISK}" \
+          SELECTION_METADATA_PATH="${SELECTION_METADATA_MAGISK}" \
+            bash src/ci/remove_superseded_assets.sh
+
       - name: Publish OTA metadata
-        if: inputs.publish && inputs.release-type != 'build-only'
+        if: inputs.publish && inputs.release-type != 'build-only' && env.ROOT_MODE_RESOLVED != 'both'
         shell: bash
         env:
           GIT_COMMIT_EMAIL: ${{ secrets.EMAIL }}
@@ -299,3 +388,21 @@ jobs:
           SELECTION_METADATA_PATH: ${{ env.SELECTION_METADATA }}
         run: |
           bash src/ci/publish_ota.sh
+
+      - name: Publish paired OTA metadata
+        if: inputs.publish && inputs.release-type != 'build-only' && env.ROOT_MODE_RESOLVED == 'both'
+        shell: bash
+        env:
+          GIT_COMMIT_EMAIL: ${{ secrets.EMAIL }}
+          GIT_COMMIT_NAME: ${{ github.repository_owner }}
+          ROM_PROFILE_PROVIDER: ${{ env.ROM_PROFILE_PROVIDER }}
+          ROOTLESS_OTA_ARTIFACT_PATH: ${{ env.OUTPUTS_PATCHED_OTA_ROOTLESS }}
+          ROOTLESS_SELECTION_METADATA_PATH: ${{ env.SELECTION_METADATA_ROOTLESS }}
+          ROOTLESS_OTA_METADATA_PATH: ${{ env.OTA_METADATA_ROOTLESS }}
+          ROOTLESS_MODULE_SELECTION_FINGERPRINT: ${{ env.MODULE_SELECTION_FINGERPRINT_ROOTLESS }}
+          MAGISK_OTA_ARTIFACT_PATH: ${{ env.OUTPUTS_PATCHED_OTA_MAGISK }}
+          MAGISK_SELECTION_METADATA_PATH: ${{ env.SELECTION_METADATA_MAGISK }}
+          MAGISK_OTA_METADATA_PATH: ${{ env.OTA_METADATA_MAGISK }}
+          MAGISK_MODULE_SELECTION_FINGERPRINT: ${{ env.MODULE_SELECTION_FINGERPRINT_MAGISK }}
+        run: |
+          bash src/ci/publish_ota_pair.sh
