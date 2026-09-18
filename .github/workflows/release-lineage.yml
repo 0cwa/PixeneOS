@@ -32,6 +32,11 @@ on:
         required: false
         type: boolean
         default: false
+      boot-animation:
+        description: Include the local custom boot animation
+        required: false
+        type: boolean
+        default: false
       release-type:
         description: Release behavior
         required: true
@@ -46,16 +51,74 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  schedule_config:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      device_id: ${{ steps.definition.outputs.device_id }}
+      rom_family: ${{ steps.definition.outputs.rom_family }}
+      update_channel: ${{ steps.definition.outputs.update_channel }}
+      root: ${{ steps.definition.outputs.root }}
+      afsr: ${{ steps.definition.outputs.afsr }}
+      magisk_preinit_device: ${{ steps.definition.outputs.magisk_preinit_device }}
+      alterinstaller: ${{ steps.definition.outputs.alterinstaller }}
+      bcr: ${{ steps.definition.outputs.bcr }}
+      custota: ${{ steps.definition.outputs.custota }}
+      msd: ${{ steps.definition.outputs.msd }}
+      oemunlockonboot: ${{ steps.definition.outputs.oemunlockonboot }}
+      fdroid_privileged_extension: ${{ steps.definition.outputs.fdroid_privileged_extension }}
+      boot_animation: ${{ steps.definition.outputs.boot_animation }}
+      compatible_sepolicy_patching: ${{ steps.definition.outputs.compatible_sepolicy_patching }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Load scheduled build definition
+        id: definition
+        shell: bash
+        env:
+          SCHEDULE_DEFINITION: .github/schedules/lineageos-pdx235.toml
+          EXPECTED_ROM_FAMILY: lineageos
+        run: bash src/ci/load_schedule_definition.sh
+
+  scheduled_build:
+    if: github.event_name == 'schedule'
+    needs: schedule_config
+    uses: ./.github/workflows/build-rom.yml
+    with:
+      rom-family: ${{ needs.schedule_config.outputs.rom_family }}
+      device-id: ${{ needs.schedule_config.outputs.device_id }}
+      root: ${{ needs.schedule_config.outputs.root == 'true' }}
+      afsr: ${{ needs.schedule_config.outputs.afsr == 'true' }}
+      magisk-preinit-device: ${{ needs.schedule_config.outputs.magisk_preinit_device }}
+      update-channel: ${{ needs.schedule_config.outputs.update_channel }}
+      alterinstaller: ${{ needs.schedule_config.outputs.alterinstaller == 'true' }}
+      bcr: ${{ needs.schedule_config.outputs.bcr == 'true' }}
+      custota: ${{ needs.schedule_config.outputs.custota == 'true' }}
+      msd: ${{ needs.schedule_config.outputs.msd == 'true' }}
+      oemunlockonboot: ${{ needs.schedule_config.outputs.oemunlockonboot == 'true' }}
+      fdroid-privileged-extension: ${{ needs.schedule_config.outputs.fdroid_privileged_extension == 'true' }}
+      compatible-sepolicy-patching: ${{ needs.schedule_config.outputs.compatible_sepolicy_patching == 'true' }}
+      allow-unauthorized-adb: false
+      boot-animation: ${{ needs.schedule_config.outputs.boot_animation == 'true' }}
+      release-type: default
+      publish: true
+    secrets: inherit
+
+  manual_build:
+    if: github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/build-rom.yml
     with:
       rom-family: lineageos
-      device-id: ${{ inputs.device-id || 'pdx235' }}
-      root: ${{ github.event_name == 'workflow_dispatch' && inputs.root || false }}
-      magisk-preinit-device: ${{ inputs.magisk-preinit-device || 'sda47' }}
-      update-channel: ${{ inputs.update-channel || 'nightly' }}
-      compatible-sepolicy-patching: ${{ github.event_name == 'schedule' || inputs.compatible-sepolicy-patching }}
-      allow-unauthorized-adb: ${{ github.event_name == 'workflow_dispatch' && inputs.allow-unauthorized-adb || false }}
-      release-type: ${{ github.event_name == 'schedule' && 'default' || inputs.release-type }}
-      publish: ${{ github.event_name == 'schedule' || inputs.release-type != 'build-only' }}
+      device-id: ${{ inputs.device-id }}
+      root: ${{ inputs.root }}
+      magisk-preinit-device: ${{ inputs.magisk-preinit-device }}
+      update-channel: ${{ inputs.update-channel }}
+      compatible-sepolicy-patching: ${{ inputs.compatible-sepolicy-patching }}
+      allow-unauthorized-adb: ${{ inputs.allow-unauthorized-adb }}
+      boot-animation: ${{ inputs.boot-animation }}
+      release-type: ${{ inputs.release-type }}
+      publish: ${{ inputs.release-type != 'build-only' }}
     secrets: inherit
