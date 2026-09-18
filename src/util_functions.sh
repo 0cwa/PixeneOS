@@ -458,6 +458,8 @@ function generate_keys() {
 # Leverages `my-avbroot-setup` to patch the OTA
 # This function does a lot of things before patching the OTA
 function patch_ota() {
+  resolve_root_mode || return 1
+
   if [[ -z "${ROM_PROFILE[PROVIDER]:-}" ]]; then
     resolve_rom_profile || return 1
   fi
@@ -497,10 +499,25 @@ function patch_ota() {
   fi
 
   # Legacy output markers do not encode a locked module selection. Never reuse
-  # one for an enabled F-Droid build.
-  if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" != 'true' ]] &&
-    [[ -f "${OUTPUTS[PATCHED_OTA]}" ]]; then
-    echo -e "File ${OUTPUTS[PATCHED_OTA]} already exists locally. Patch skipped."
+  # one for an enabled F-Droid build. A dual build is reusable only when both
+  # OTA triplets and both per-flavor update-info files are already complete.
+  local outputs_ready=false
+  if [[ "${ROOT_MODE}" == 'both' ]]; then
+    if [[ -f "${OUTPUTS[PATCHED_OTA_ROOTLESS]}" &&
+      -f "${OUTPUTS[PATCHED_OTA_ROOTLESS]}.csig" &&
+      -f "${OUTPUTS[PATCHED_OTA_MAGISK]}" &&
+      -f "${OUTPUTS[PATCHED_OTA_MAGISK]}.csig" &&
+      -f "${OUTPUTS[OTA_METADATA_ROOTLESS]}" &&
+      -f "${OUTPUTS[OTA_METADATA_MAGISK]}" ]]; then
+      outputs_ready=true
+    fi
+  elif [[ -f "${OUTPUTS[PATCHED_OTA]}" ]]; then
+    outputs_ready=true
+  fi
+
+  if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" != 'true' &&
+    "${outputs_ready}" == true ]]; then
+    echo -e "Requested OTA output already exists locally. Patch skipped."
   else
     echo -e "Patching OTA..."
     local args=()
@@ -563,22 +580,69 @@ function patch_ota() {
       echo -e "Compatible SEPolicy Flag is NOT enabled. Continuing...\n"
     fi
 
-    # Add support for Magisk if root config is enabled
-    if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
-      echo -e "Magisk is enabled. Modifying the setup script...\n"
-      args+=("--patch-arg=--magisk" "--patch-arg" "${magisk_path}")
-      args+=("--patch-arg=--magisk-preinit-device" "--patch-arg" "${MAGISK[PREINIT]}")
-    else
-      args+=("--patch-arg=--rootless")
-      echo -e "Magisk is not enabled. Skipping...\n"
-    fi
+    # Root selection is the only part of the helper patch plan that differs
+    # between the two outputs. ROOT_MODE=both keeps rootless as the primary
+    # output and asks the helper for a Magisk secondary output from the exact
+    # same prepared replacement images.
+    case "${ROOT_MODE}" in
+      magisk)
+        echo -e "Magisk is enabled. Modifying the setup script...\n"
+        args+=("--patch-arg=--magisk" "--patch-arg" "${magisk_path}")
+        args+=("--patch-arg=--magisk-preinit-device" "--patch-arg" "${MAGISK[PREINIT]}")
+        ;;
+      rootless)
+        args+=("--patch-arg=--rootless")
+        echo -e "Magisk is not enabled. Continuing rootless...\n"
+        ;;
+      both)
+        args+=("--patch-arg=--rootless")
+        args+=("--skip-custota-tool")
+        args+=("--secondary-output" "${OUTPUTS[PATCHED_OTA_MAGISK]}")
+        args+=("--secondary-patch-arg=--magisk")
+        args+=("--secondary-patch-arg" "${magisk_path}")
+        args+=("--secondary-patch-arg=--magisk-preinit-device")
+        args+=("--secondary-patch-arg" "${MAGISK[PREINIT]}")
+        ;;
+    esac
 
     # Python command to run the patch script
     python "${my_avbroot_setup}/patch.py" "${args[@]}" || return 1
+
+    if [[ "${ROOT_MODE}" == 'both' ]]; then
+      generate_custota_variant_sidecars         "${OUTPUTS[PATCHED_OTA_ROOTLESS]}"         "${OUTPUTS[OTA_METADATA_ROOTLESS]}" || return 1
+      generate_custota_variant_sidecars         "${OUTPUTS[PATCHED_OTA_MAGISK]}"         "${OUTPUTS[OTA_METADATA_MAGISK]}" || return 1
+    fi
   fi
 
   # Deactivate the virtual environment after patching the OTA
   deactivate
+}
+
+function release_location_for_output() {
+  local artifact_name="${1}"
+
+  resolve_release_repository
+  if [[ -n "${PIXENEOS_RELEASE_BASE_URL}" ]]; then
+    printf '%s/%s' "${PIXENEOS_RELEASE_BASE_URL%/}" "${artifact_name}"
+  else
+    printf '%s/%s/%s/releases/download/%s/%s'       "${DOMAIN}"       "${PIXENEOS_RELEASE_OWNER}"       "${PIXENEOS_RELEASE_REPOSITORY}"       "${VERSION[GRAPHENEOS]}"       "${artifact_name}"
+  fi
+}
+
+function generate_custota_variant_sidecars() {
+  local ota_path="${1}"
+  local metadata_path="${2}"
+  local location
+
+  [[ -f "${ota_path}" ]] || {
+    echo "Error: missing OTA for Custota sidecars: ${ota_path}" >&2
+    return 1
+  }
+  location="$(release_location_for_output "${ota_path}")" || return 1
+
+  run_executable_tool custota-tool gen-csig     --input "${ota_path}"     --key "${KEYS[OTA]}"     --cert "${KEYS[CERT_OTA]}"     --passphrase-env-var PASSPHRASE_OTA || return 1
+
+  run_executable_tool custota-tool gen-update-info     --file "${metadata_path}"     --location "${location}"
 }
 
 function resolve_release_repository() {
