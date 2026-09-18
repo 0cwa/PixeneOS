@@ -179,12 +179,12 @@ if set(data) != {"schema_version", "tools"}:
 
 expected = {
     "afsr": {
-        "version": "1.0.4",
-        "artifact": "afsr-1.0.4-x86_64-unknown-linux-gnu.zip",
+        "version": "2.0.0",
+        "artifact": "afsr-2.0.0-x86_64-unknown-linux-gnu.zip",
         "layout": {"afsr": "0755"},
         "url": (
             "https://github.com/chenxiaolong/afsr/releases/download/"
-            "v1.0.4/afsr-1.0.4-x86_64-unknown-linux-gnu.zip"
+            "v2.0.0/afsr-2.0.0-x86_64-unknown-linux-gnu.zip"
         ),
     },
     "avbroot": {
@@ -217,12 +217,12 @@ expected = {
         ),
     },
     "custota-tool": {
-        "version": "6.4",
-        "artifact": "custota-tool-6.4-x86_64-unknown-linux-gnu.zip",
+        "version": "6.5",
+        "artifact": "custota-tool-6.5-x86_64-unknown-linux-gnu.zip",
         "layout": {"custota-tool": "0755"},
         "url": (
             "https://github.com/chenxiaolong/Custota/releases/download/"
-            "v6.4/custota-tool-6.4-x86_64-unknown-linux-gnu.zip"
+            "v6.5/custota-tool-6.5-x86_64-unknown-linux-gnu.zip"
         ),
     },
 }
