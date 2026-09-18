@@ -58,6 +58,8 @@ function _config_schema_define() {
 
 _config_schema_define device_name DEVICE_NAME device string \
   DEVICE_NAME scalar '' DEVICE_NAME '' false caller-or-default
+_config_schema_define devices DEVICES device string \
+  DEVICES scalar '' DEVICES '' false caller-or-default
 _config_schema_define rom_family ROM_FAMILY device string \
   ROM_FAMILY scalar '' ROM_FAMILY grapheneos true caller-or-default
 _config_schema_define interactive_mode INTERACTIVE_MODE device boolean \
