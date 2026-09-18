@@ -48,6 +48,35 @@ check_definition   .github/schedules/grapheneos-shiba.toml   shiba grapheneos st
 
 check_definition   .github/schedules/lineageos-pdx235.toml   pdx235 lineageos nightly sda47 true
 
+check_loader() {
+  local file="${1}"
+  local expected_device="${2}"
+  local expected_family="${3}"
+  local output_file env_file
+
+  output_file="$(mktemp)"
+  env_file="$(mktemp)"
+  GITHUB_OUTPUT="${output_file}" \
+  GITHUB_ENV="${env_file}" \
+  SCHEDULE_DEFINITION="${file}" \
+  EXPECTED_ROM_FAMILY="${expected_family}" \
+    bash src/ci/load_schedule_definition.sh >/dev/null
+
+  grep -Fxq "device_id=${expected_device}" "${output_file}" ||
+    fail "${file}: loader emitted wrong device"
+  grep -Fxq "rom_family=${expected_family}" "${output_file}" ||
+    fail "${file}: loader emitted wrong ROM family"
+  grep -Fxq 'boot_animation=true' "${output_file}" ||
+    fail "${file}: loader did not enable scheduled boot animation"
+  grep -Fxq 'ADDITIONALS_BOOT_ANIMATION=true' "${env_file}" ||
+    fail "${file}: loader did not export boot animation to the job environment"
+
+  rm -f "${output_file}" "${env_file}"
+}
+
+check_loader .github/schedules/grapheneos-shiba.toml shiba grapheneos
+check_loader .github/schedules/lineageos-pdx235.toml pdx235 lineageos
+
 grep -Fq 'SCHEDULE_DEFINITION: .github/schedules/grapheneos-shiba.toml' .github/workflows/release.yml ||
   fail "GrapheneOS cron does not reference the shiba schedule definition"
 grep -Fq 'SCHEDULE_DEFINITION: .github/schedules/lineageos-pdx235.toml' .github/workflows/release-lineage.yml ||
