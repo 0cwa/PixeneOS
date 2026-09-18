@@ -19,6 +19,7 @@ required=(
   rom_family
   update_channel
   root
+  root_mode
   magisk_preinit
   afsr
   alterinstaller
@@ -43,6 +44,7 @@ device_id="$(toml_resolve_value device_name '')"
 rom_family="$(toml_resolve_value rom_family '')"
 update_channel="$(toml_resolve_value update_channel '')"
 root="$(toml_resolve_value root '')"
+root_mode="$(toml_resolve_value root_mode '')"
 magisk_preinit="$(toml_resolve_value magisk_preinit '')"
 afsr="$(toml_resolve_value afsr '')"
 alterinstaller="$(toml_resolve_value alterinstaller '')"
@@ -55,7 +57,7 @@ boot_animation="$(toml_resolve_value boot_animation '')"
 compatible_sepolicy_patching="$(toml_resolve_value compatible_sepolicy_patching '')"
 force_update="$(toml_resolve_value force_update '')"
 
-[[ -n "${device_id}" && -n "${rom_family}" && -n "${update_channel}" && -n "${magisk_preinit}" ]] || {
+[[ -n "${device_id}" && -n "${rom_family}" && -n "${update_channel}" && -n "${root_mode}" && -n "${magisk_preinit}" ]] || {
   echo "::error::Schedule definition contains an empty required string."
   exit 1
 }
@@ -65,11 +67,20 @@ if [[ -n "${EXPECTED_ROM_FAMILY:-}" && "${rom_family}" != "${EXPECTED_ROM_FAMILY
   exit 1
 fi
 
+case "${root_mode}" in
+  rootless|magisk|both) ;;
+  *)
+    echo "::error::Schedule ROOT_MODE must be rootless, magisk, or both."
+    exit 1
+    ;;
+esac
+
 {
   echo "device_id=${device_id}"
   echo "rom_family=${rom_family}"
   echo "update_channel=${update_channel}"
   echo "root=${root}"
+  echo "root_mode=${root_mode}"
   echo "magisk_preinit_device=${magisk_preinit}"
   echo "afsr=${afsr}"
   echo "alterinstaller=${alterinstaller}"
@@ -88,6 +99,7 @@ fi
   echo "ROM_FAMILY=${rom_family}"
   echo "GRAPHENEOS_UPDATE_CHANNEL=${update_channel}"
   echo "ADDITIONALS_ROOT=${root}"
+  echo "ROOT_MODE=${root_mode}"
   echo "MAGISK_PREINIT=${magisk_preinit}"
   echo "ADDITIONALS_AFSR=${afsr}"
   echo "ADDITIONALS_ALTERINSTALLER=${alterinstaller}"
