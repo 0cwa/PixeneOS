@@ -7,11 +7,11 @@
       "id": "afsr",
       "layout": [
         {
+          "mode": "0755",
           "path": "afsr",
-          "type": "file",
-          "size": 4247824,
           "sha256": "a51372a654a925b9570a378e89449560955c769f6e4b74adb89eba2323a919ef",
-          "mode": "0755"
+          "size": 4247824,
+          "type": "file"
         }
       ],
       "sha256": "bb30be01ff336a8ac7bc204d0623385f5257bb46ffc38a888af553e059acdc0e",
@@ -71,11 +71,11 @@
       "id": "custota-tool",
       "layout": [
         {
+          "mode": "0755",
           "path": "custota-tool",
-          "type": "file",
-          "size": 5605136,
           "sha256": "09e97e6b15d3257a6154876c7e0c77d18e4a97e8b624a08922e70c4c09cbb527",
-          "mode": "0755"
+          "size": 5605136,
+          "type": "file"
         }
       ],
       "sha256": "936566f6aa69f6649d4f501f221271ca3f2ce3a68e063feef20af539a4dfc30b",
