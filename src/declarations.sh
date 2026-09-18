@@ -15,6 +15,7 @@ declare -A DECLARATION_CALLER_PRESENT
 
 _declarations_source_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 source "${_declarations_source_dir}/config_schema.sh"
+source "${_declarations_source_dir}/logger.sh"
 unset _declarations_source_dir
 
 if [[ ! ${DECLARATION_CALLER_CAPTURED+x} ]]; then
