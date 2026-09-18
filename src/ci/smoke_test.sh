@@ -27,10 +27,18 @@ PY
 
 source src/declarations.sh
 helper_source="${PIXENEOS_AVBROOT_SETUP_SOURCE:-https://github.com/0cwa/my-avbroot-setup}"
-if ! git ls-remote "${helper_source}" | grep -Fq "${VERSION[AVBROOT_SETUP]}"; then
-  echo "::error::Pinned helper revision is not advertised by ${helper_source}: ${VERSION[AVBROOT_SETUP]}"
+helper_probe="$(mktemp -d)"
+trap 'rm -rf "${helper_probe}"' EXIT
+git -C "${helper_probe}" init -q
+git -C "${helper_probe}" remote add origin "${helper_source}"
+if ! git -C "${helper_probe}" fetch --quiet --depth=1 origin "${VERSION[AVBROOT_SETUP]}"; then
+  echo "::error::Pinned helper revision is not fetchable from ${helper_source}: ${VERSION[AVBROOT_SETUP]}"
   exit 1
 fi
+[[ "$(git -C "${helper_probe}" rev-parse FETCH_HEAD)" == "${VERSION[AVBROOT_SETUP]}" ]] || {
+  echo "::error::Helper fetch did not resolve to the pinned revision."
+  exit 1
+}
 echo "ok helper revision: ${VERSION[AVBROOT_SETUP]}"
 
 source src/fetcher.sh
