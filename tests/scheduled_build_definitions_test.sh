@@ -25,7 +25,9 @@ check_definition() {
     [[ "$(toml_resolve_value update_channel '')" == "${expected_channel}" ]] ||
       fail "${file}: wrong update channel"
     [[ "$(toml_resolve_value root '')" == false ]] ||
-      fail "${file}: scheduled build must remain rootless"
+      fail "${file}: legacy scheduled ROOT fallback must remain false"
+    [[ "$(toml_resolve_value root_mode '')" == both ]] ||
+      fail "${file}: scheduled build must request both root variants"
     [[ "$(toml_resolve_value magisk_preinit '')" == "${expected_preinit}" ]] ||
       fail "${file}: wrong Magisk preinit definition"
     [[ "$(toml_resolve_value boot_animation '')" == true ]] ||
@@ -66,6 +68,10 @@ check_loader() {
     fail "${file}: loader emitted wrong device"
   grep -Fxq "rom_family=${expected_family}" "${output_file}" ||
     fail "${file}: loader emitted wrong ROM family"
+  grep -Fxq 'root_mode=both' "${output_file}" ||
+    fail "${file}: loader did not emit paired root mode"
+  grep -Fxq 'ROOT_MODE=both' "${env_file}" ||
+    fail "${file}: loader did not export paired root mode"
   grep -Fxq 'boot_animation=true' "${output_file}" ||
     fail "${file}: loader did not enable scheduled boot animation"
   grep -Fxq 'ADDITIONALS_BOOT_ANIMATION=true' "${env_file}" ||
@@ -86,6 +92,13 @@ grep -Fq 'needs.preflight.outputs.boot_animation' .github/workflows/release.yml 
   fail "GrapheneOS scheduled boot-animation selection is not forwarded from the definition"
 grep -Fq 'needs.schedule_config.outputs.boot_animation' .github/workflows/release-lineage.yml ||
   fail "LineageOS scheduled boot-animation selection is not forwarded from the definition"
+
+grep -Fq 'needs.preflight.outputs.root_mode' .github/workflows/release.yml ||
+  fail "GrapheneOS scheduled root mode is not forwarded from the definition"
+grep -Fq 'needs.schedule_config.outputs.root_mode' .github/workflows/release-lineage.yml ||
+  fail "LineageOS scheduled root mode is not forwarded from the definition"
+grep -Fq 'check_existing_pair.sh' .github/workflows/release.yml ||
+  fail "GrapheneOS paired schedule is not protected by paired existing-build preflight"
 
 if grep -Eq 'boot-animation:[[:space:]]*true' .github/workflows/release.yml .github/workflows/release-lineage.yml; then
   fail "Scheduled boot animation must come from the schedule definition, not a hardcoded workflow literal"
