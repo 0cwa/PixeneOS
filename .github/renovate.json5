@@ -21,16 +21,10 @@
       ],
     },
   ],
-  // Executable tools (AFSR, avbroot, custota-tool) are intentionally absent here.\n  // Their versions, archive hashes, member hashes, modes, and signer binding must\n  // be updated atomically in locks/executable-tools-v1.json.\n  customManagers: [
-    {
-      customType: "regex",
-      managerFilePatterns: ["/src/declarations.sh/"],
-      matchStrings: [
-        'VERSION\\[AVBROOT\\]=\\"\\$\\{VERSION\\[AVBROOT\\]:-(?<currentValue>.*?)\\}"',
-      ],
-      depNameTemplate: "chenxiaolong/avbroot",
-      datasourceTemplate: "github-releases",
-    },
+  // Executable tools (AFSR, avbroot, custota-tool) are intentionally absent here.
+  // Their versions, archive hashes, member hashes, modes, and signer binding must
+  // be updated atomically in locks/executable-tools-v1.json.
+  customManagers: [
     {
       customType: "regex",
       managerFilePatterns: ["/src/declarations.sh/"],
@@ -85,15 +79,6 @@
         'VERSION\\[OEMUNLOCKONBOOT\\]=\\"\\$\\{VERSION\\[OEMUNLOCKONBOOT\\]:-(?<currentValue>.*?)\\}"',
       ],
       depNameTemplate: "chenxiaolong/OEMUnlockOnBoot",
-      datasourceTemplate: "github-releases",
-    },
-    {
-      customType: "regex",
-      managerFilePatterns: ["/src/declarations.sh/"],
-      matchStrings: [
-        'VERSION\\[AFSR\\]=\\"\\$\\{VERSION\\[AFSR\\]:-(?<currentValue>.*?)\\}"',
-      ],
-      depNameTemplate: "chenxiaolong/afsr",
       datasourceTemplate: "github-releases",
     },
   ],
