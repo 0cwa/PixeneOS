@@ -17,6 +17,37 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      - name: Probe candidate executable-tool archives
+        continue-on-error: true
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import io
+          import stat
+          import urllib.request
+          import zipfile
+
+          assets = {
+              "afsr": "https://github.com/chenxiaolong/afsr/releases/download/v2.0.0/afsr-2.0.0-x86_64-unknown-linux-gnu.zip",
+              "custota-tool": "https://github.com/chenxiaolong/Custota/releases/download/v6.5/custota-tool-6.5-x86_64-unknown-linux-gnu.zip",
+          }
+          for name, url in assets.items():
+              with urllib.request.urlopen(url, timeout=60) as response:
+                  payload = response.read()
+              print(f"LOCK_PROBE {name} archive_size={len(payload)} archive_sha256={hashlib.sha256(payload).hexdigest()}")
+              with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+                  for info in archive.infolist():
+                      if info.is_dir():
+                          continue
+                      data = archive.read(info)
+                      mode = stat.S_IMODE(info.external_attr >> 16)
+                      print(
+                          f"LOCK_PROBE {name} member={info.filename} size={len(data)} "
+                          f"sha256={hashlib.sha256(data).hexdigest()} mode={mode:04o}"
+                      )
+          PY
+
       - name: Check shell syntax
         shell: bash
         run: |
