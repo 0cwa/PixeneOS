@@ -169,6 +169,7 @@ jobs:
           enforce_output_policy "${OUTPUT_SCOPE}"
 
       - name: Configure Android APK verification tools
+        if: inputs.microg || inputs.fdroid-privileged-extension
         shell: bash
         run: bash src/ci/configure_android_apk_tools.sh
 
