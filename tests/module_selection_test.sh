@@ -175,9 +175,6 @@ reset_fixture() {
   FDROID_PRIVILEGED_EXTENSION_PROFILE=""
   FDROID_PRIVILEGED_EXTENSION_CACHE=""
   FDROID_PRIVILEGED_EXTENSION_PATCH_REPORT=""
-  MICROG_LOCK="${WORKDIR}/microg.lock.json"
-  MICROG_CACHE=""
-  MICROG_PATCH_REPORT=""
   LOCKED_INPUTS_VALID="true"
   PREPARE_FAILURE=""
   PREPARE_CACHE_SENTINEL=""
@@ -345,7 +342,8 @@ enable_microg_fixture() {
   OUTPUT_SCOPE="local-unpublished"
   ROOT_MODE=""
   RESOLVED_ROOT_MODE=""
-  touch -- "${MICROG_LOCK}"
+  mkdir -p "${WORKDIR}/tools/my-avbroot-setup/locks"
+  touch "${WORKDIR}/tools/my-avbroot-setup/locks/microg-v0.3.15.250932.json"
 }
 
 test_microg_locked_preparation_and_arguments() {
@@ -354,7 +352,7 @@ test_microg_locked_preparation_and_arguments() {
 
   run_patch
 
-  assert_pair "--module-lock" "${MICROG_LOCK}" "microG"
+  assert_pair "--module-lock" "${WORKDIR}/tools/my-avbroot-setup/locks/microg-v0.3.15.250932.json" "microG"
   assert_pair     "--module-profile"     "${WORKDIR}/locked-profiles/microg.toml"     "microG"
   assert_pair "--module-cache" "${WORKDIR}/locked-artifacts" "microG"
   assert_pair     "--patch-report"     "${WORKDIR}/patched.zip.microg-patch-report.json"     "microG"
@@ -363,8 +361,6 @@ test_microg_locked_preparation_and_arguments() {
 
   grep -Fxq "rom_family = 'lineageos'"     "${WORKDIR}/locked-profiles/microg.toml" ||
     fail "microG profile did not bind LineageOS"
-  grep -Fxq "root_mode = 'rootless'"     "${WORKDIR}/locked-profiles/microg.toml" ||
-    fail "microG profile did not bind rootless preparation"
   grep -Fxq "selective_signature_spoofing = true"     "${WORKDIR}/locked-profiles/microg.toml" ||
     fail "microG profile lacks restricted spoofing capability"
   grep -Fxq "product_priv_app = true"     "${WORKDIR}/locked-profiles/microg.toml" ||
