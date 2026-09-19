@@ -627,6 +627,8 @@ function patch_ota() {
       args+=("${locked_module_args[@]}")
     elif [[ "${ADDITIONALS[MICROG]}" == 'true' ]]; then
       prepare_microg args "${my_avbroot_setup}" || return 1
+    elif ! prepare_fdroid_privileged_extension args "${my_avbroot_setup}"; then
+      return 1
     fi
 
     if [[ "${ROM_PROFILE[CLEAR_VBMETA_FLAGS]}" == 'true' ]]; then
