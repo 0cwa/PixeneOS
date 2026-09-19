@@ -370,13 +370,9 @@ function prepare_fdroid_privileged_extension() {
 function write_microg_resolution_profile() {
   local profile_path="${1}"
   local root_mode='rootless'
-  local providers='[]'
 
   resolve_root_mode >/dev/null || return 1
-  if [[ "${RESOLVED_ROOT_MODE}" == 'magisk' ]]; then
-    root_mode='rooted'
-    providers="['magisk']"
-  fi
+  [[ "${RESOLVED_ROOT_MODE}" != 'magisk' ]] || root_mode='rooted'
 
   mkdir -p -- "$(dirname -- "${profile_path}")" || return 1
   cat >"${profile_path}" <<EOF
@@ -392,8 +388,8 @@ acknowledgements = []
 experimental_acknowledgements = []
 
 [capabilities]
-root_providers = ${providers}
-zygisk_providers = ${providers}
+root_providers = []
+zygisk_providers = []
 selective_signature_spoofing = true
 product_priv_app = true
 custom_init_selinux = false
