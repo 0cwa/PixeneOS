@@ -255,34 +255,25 @@ fingerprint. The payload is not read or required while the option is disabled.
 
 ### microG on LineageOS
 
-PixeneOS can inject a locked pair of official microG custom-ROM APKs into
-LineageOS builds with `'ADDITIONALS[MICROG]' = true`. The reviewed v1 set is
-microG `v0.3.15.250932`: Services (`com.google.android.gms`, versionCode
-`250932030`) and Companion (`com.android.vending`, versionCode `84022630`).
+Set `'ADDITIONALS[MICROG]' = true` for an opt-in LineageOS build. The pinned
+helper supplies the reviewed microG `v0.3.15.250932` lock and adapter: Services
+(`com.google.android.gms`, versionCode `250932030`) plus Companion
+(`com.android.vending`, versionCode `84022630`).
 
-The APKs are installed as privileged `product` apps with the reviewed
-permission/default-permission/sysconfig configuration used by LineageOS for
-microG. Their exact sizes, SHA-256 digests, package/version identities, and the
-official microG APK signer are pinned in
-`locks/microg-v0.3.15.250932.json` and reverified before OTA unpacking.
-No microG installer script is executed.
+Before OTA unpacking, the helper's generic locked-artifact path verifies exact
+size, SHA-256, package/version identity, and the official microG APK signer.
+The adapter installs the APKs as privileged `product` apps with the reviewed
+permission/default-permission/sysconfig integration. No microG installer,
+framework patch, unrestricted signature spoofing, or Magisk/LSPosed hook runs.
 
-This integration relies on current LineageOS API 36 restricted microG signature
-spoofing; it does not patch `services.jar`, enable unrestricted spoofing, or
-require Magisk/LSPosed. The same prepared microG product image is therefore
-shared by paired rootless and Magisk builds.
+This relies on current LineageOS API 36 restricted microG signature spoofing.
+GrapheneOS is intentionally rejected. GsfProxy, F-Droid, Aurora Store, and
+opinionated microG preference defaults are not bundled.
 
-GrapheneOS is intentionally unsupported by this module. GsfProxy, F-Droid,
-Aurora Store, and runtime spoofing modules are not bundled. The existing
-experimental F-Droid locked bundle and microG cannot currently be selected in
-the same build because the helper accepts one locked trust/profile bundle per
-patch invocation.
-
-The checked-in `lineageos-pdx235.toml` schedule enables microG; the
-`grapheneos-shiba.toml` schedule explicitly keeps it disabled. Physical
-pdx235 first-boot, account/FCM/location behavior, and Custota OTA-persistence
-testing are still acceptance gates before treating the integration as
-device-validated.
+microG remains default-off, including scheduled pdx235 builds, until physical
+pdx235 first-boot, self-check/account, FCM, location, and Custota OTA-persistence
+validation is complete. The same prepared microG product image works for both
+rootless and Magisk outputs when explicitly selected.
 
 By default, generated Custota metadata points patched OTA downloads at GitHub Releases for the current repository. These environment variables can override that behavior:
 
