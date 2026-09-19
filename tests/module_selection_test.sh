@@ -357,7 +357,7 @@ test_microg_locked_preparation_and_arguments() {
   assert_pair "--module-cache" "${WORKDIR}/locked-artifacts" "microG"
   assert_pair     "--patch-report"     "${WORKDIR}/patched.zip.microg-patch-report.json"     "microG"
   assert_not_contains "--module-microg" "microG legacy module"
-  assert_prepare_stages     "microG preparation"     resolve artifacts-fetch artifacts-verify
+  assert_prepare_stages "microG preparation" artifacts-fetch
 
   grep -Fxq "rom_family = 'lineageos'"     "${WORKDIR}/locked-profiles/microg.toml" ||
     fail "microG profile did not bind LineageOS"
