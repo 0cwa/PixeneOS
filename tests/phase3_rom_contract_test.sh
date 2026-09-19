@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2024-2026 PixeneOS contributors
 
-set -euxo pipefail
+set -euo pipefail
 
 TEST_ROOT="$(mktemp -d)"
 trap 'rm -rf -- "${TEST_ROOT}"' EXIT
@@ -184,7 +184,7 @@ test_selection_fingerprint() (
   ROM_FAMILY="grapheneos"
   resolve_rom_profile
   ADDITIONALS[MICROG]="true"
-  if fingerprint >/dev/null 2>&1; then
+  if module_selection_fingerprint >/dev/null 2>&1; then
     fail "GrapheneOS unexpectedly accepted microG"
   fi
   ADDITIONALS[MICROG]="false"
