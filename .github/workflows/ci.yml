@@ -17,6 +17,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      - name: Configure Android APK verification tools
+        shell: bash
+        run: bash src/ci/configure_android_apk_tools.sh
+
       - name: Check shell syntax
         shell: bash
         run: |
