@@ -108,7 +108,7 @@ grep -Fq 'root-mode:' .github/workflows/release-lineage.yml ||
 grep -Fq 'root-mode:' .github/workflows/multi-release.yml ||
   fail "multi-device release workflow does not expose root-mode"
 
-expected_helper='62d8589460e2b469cf135245a21353c08d43df92'
+expected_helper='df265fc62f0dcd840cb1ee6746ba52aeba7b6a70'
 grep -Fq "VERSION[AVBROOT_SETUP]=\"${expected_helper}\"" src/declarations.sh ||
   fail "PixeneOS is not pinned to the green dual-output helper"
 python3 - "${expected_helper}" <<'PY'
