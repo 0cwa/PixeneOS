@@ -27,7 +27,6 @@ required=(
   custota
   msd
   oemunlockonboot
-  microg
   fdroid_privileged_extension
   boot_animation
   compatible_sepolicy_patching
@@ -53,7 +52,6 @@ bcr="$(toml_resolve_value bcr '')"
 custota="$(toml_resolve_value custota '')"
 msd="$(toml_resolve_value msd '')"
 oemunlockonboot="$(toml_resolve_value oemunlockonboot '')"
-microg="$(toml_resolve_value microg '')"
 fdroid_privileged_extension="$(toml_resolve_value fdroid_privileged_extension '')"
 boot_animation="$(toml_resolve_value boot_animation '')"
 compatible_sepolicy_patching="$(toml_resolve_value compatible_sepolicy_patching '')"
@@ -90,7 +88,6 @@ esac
   echo "custota=${custota}"
   echo "msd=${msd}"
   echo "oemunlockonboot=${oemunlockonboot}"
-  echo "microg=${microg}"
   echo "fdroid_privileged_extension=${fdroid_privileged_extension}"
   echo "boot_animation=${boot_animation}"
   echo "compatible_sepolicy_patching=${compatible_sepolicy_patching}"
@@ -110,7 +107,6 @@ esac
   echo "ADDITIONALS_CUSTOTA=${custota}"
   echo "ADDITIONALS_MSD=${msd}"
   echo "ADDITIONALS_OEMUNLOCKONBOOT=${oemunlockonboot}"
-  echo "ADDITIONALS_MICROG=${microg}"
   echo "ADDITIONALS_FDROID_PRIVILEGED_EXTENSION=${fdroid_privileged_extension}"
   echo "ADDITIONALS_BOOT_ANIMATION=${boot_animation}"
   echo "ADDITIONALS_MAS_COMPATIBLE_SEPOLICY=${compatible_sepolicy_patching}"
