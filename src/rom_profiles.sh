@@ -112,8 +112,8 @@ function enforce_publication_evidence() {
   fi
   enforce_output_policy "${output_scope}" || return 1
 
-  # No locked adapter currently has a reviewed source-delivery publication
-  # path. The helper report remains authoritative once such a path exists.
+  # F-Droid remains local-only until its source-delivery publication path is
+  # reviewed. The locked microG artifacts are Apache-2.0 and permit publication.
   if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' ]]; then
     echo "Error: locked-module publication evidence is unavailable." >&2
     return 1
