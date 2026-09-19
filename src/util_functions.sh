@@ -551,22 +551,18 @@ function patch_ota() {
     enable_venv || return 1
   fi
 
-  # Locked module artifacts must be resolved, fetched, and verified before any
-  # OTA contents are unpacked. Only one locked trust bundle is accepted today.
   if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' &&
     "${ADDITIONALS[MICROG]}" == 'true' ]]; then
     echo "Error: multiple locked module bundles are not supported in one build." >&2
     return 1
   fi
-  if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' ||
-    "${ADDITIONALS[MICROG]}" == 'true' ]]; then
+
+  # Preserve the existing F-Droid early-preparation path because callers may
+  # place its cache under the extraction tree.
+  if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' ]]; then
     rm -rf -- "${WORKDIR}/extracted/extracts/"
-    if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' ]]; then
-      prepare_fdroid_privileged_extension \
-        locked_module_args "${my_avbroot_setup}" || return 1
-    else
-      prepare_microg locked_module_args "${my_avbroot_setup}" || return 1
-    fi
+    prepare_fdroid_privileged_extension \
+      locked_module_args "${my_avbroot_setup}" || return 1
   fi
 
   # Extract the official public keys and certificates if not found
@@ -593,7 +589,6 @@ function patch_ota() {
   fi
 
   if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" != 'true' &&
-    "${ADDITIONALS[MICROG]}" != 'true' &&
     "${outputs_ready}" == true ]]; then
     echo -e "Requested OTA output already exists locally. Patch skipped."
   else
@@ -620,8 +615,7 @@ function patch_ota() {
     # Preserve the legacy cleanup ordering when locked modules are disabled.
     # Enabled builds already cleared this tree before locked acquisition so a
     # caller-selected cache below it remains available to patch.py.
-    if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" != 'true' &&
-      "${ADDITIONALS[MICROG]}" != 'true' ]]; then
+    if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" != 'true' ]]; then
       rm -rf -- "${WORKDIR}/extracted/extracts/"
     fi
 
@@ -631,11 +625,10 @@ function patch_ota() {
       return 1
     fi
     append_enabled_module_arguments args
-    if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' ||
-      "${ADDITIONALS[MICROG]}" == 'true' ]]; then
+    if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' ]]; then
       args+=("${locked_module_args[@]}")
-    elif ! prepare_fdroid_privileged_extension args "${my_avbroot_setup}"; then
-      return 1
+    elif [[ "${ADDITIONALS[MICROG]}" == 'true' ]]; then
+      prepare_microg args "${my_avbroot_setup}" || return 1
     fi
 
     if [[ "${ROM_PROFILE[CLEAR_VBMETA_FLAGS]}" == 'true' ]]; then
