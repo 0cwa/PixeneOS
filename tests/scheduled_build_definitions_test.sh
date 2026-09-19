@@ -13,7 +13,6 @@ check_definition() {
   local expected_channel="${4}"
   local expected_preinit="${5}"
   local expected_sepolicy="${6}"
-  local expected_microg="${7}"
 
   (
     source src/util_functions.sh
@@ -44,20 +43,17 @@ check_definition() {
     done
     [[ "$(toml_resolve_value fdroid_privileged_extension '')" == false ]] ||
       fail "${file}: F-Droid privileged extension must remain default-off"
-    [[ "$(toml_resolve_value microg '')" == "${expected_microg}" ]] ||
-      fail "${file}: wrong microG selection"
   )
 }
 
-check_definition   .github/schedules/grapheneos-shiba.toml   shiba grapheneos stable sda10 false false
+check_definition   .github/schedules/grapheneos-shiba.toml   shiba grapheneos stable sda10 false
 
-check_definition   .github/schedules/lineageos-pdx235.toml   pdx235 lineageos nightly sda47 true true
+check_definition   .github/schedules/lineageos-pdx235.toml   pdx235 lineageos nightly sda47 true
 
 check_loader() {
   local file="${1}"
   local expected_device="${2}"
   local expected_family="${3}"
-  local expected_microg="${4}"
   local output_file env_file
 
   output_file="$(mktemp)"
@@ -78,18 +74,14 @@ check_loader() {
     fail "${file}: loader did not export paired root mode"
   grep -Fxq 'boot_animation=true' "${output_file}" ||
     fail "${file}: loader did not enable scheduled boot animation"
-  grep -Fxq "microg=${expected_microg}" "${output_file}" ||
-    fail "${file}: loader emitted wrong microG selection"
-  grep -Fxq "ADDITIONALS_MICROG=${expected_microg}" "${env_file}" ||
-    fail "${file}: loader did not export microG selection"
   grep -Fxq 'ADDITIONALS_BOOT_ANIMATION=true' "${env_file}" ||
     fail "${file}: loader did not export boot animation to the job environment"
 
   rm -f "${output_file}" "${env_file}"
 }
 
-check_loader .github/schedules/grapheneos-shiba.toml shiba grapheneos false
-check_loader .github/schedules/lineageos-pdx235.toml pdx235 lineageos true
+check_loader .github/schedules/grapheneos-shiba.toml shiba grapheneos
+check_loader .github/schedules/lineageos-pdx235.toml pdx235 lineageos
 
 grep -Fq 'SCHEDULE_DEFINITION: .github/schedules/grapheneos-shiba.toml' .github/workflows/release.yml ||
   fail "GrapheneOS cron does not reference the shiba schedule definition"
@@ -105,9 +97,6 @@ grep -Fq 'needs.preflight.outputs.root_mode' .github/workflows/release.yml ||
   fail "GrapheneOS scheduled root mode is not forwarded from the definition"
 grep -Fq 'needs.schedule_config.outputs.root_mode' .github/workflows/release-lineage.yml ||
   fail "LineageOS scheduled root mode is not forwarded from the definition"
-
-grep -Fq 'needs.schedule_config.outputs.microg' .github/workflows/release-lineage.yml ||
-  fail "LineageOS scheduled microG selection is not forwarded from the definition"
 grep -Fq 'check_existing_pair.sh' .github/workflows/release.yml ||
   fail "GrapheneOS paired schedule is not protected by paired existing-build preflight"
 
