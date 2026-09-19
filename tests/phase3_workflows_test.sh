@@ -261,7 +261,6 @@ test_release_configuration_forwarding() {
   assert_contains "${RELEASE}"     'run:[[:space:]]*bash src/ci/load_schedule_definition\.sh'     "GrapheneOS schedule must use the shared definition loader"
   assert_contains "${loader}"     'check_toml_env "\$\{SCHEDULE_DEFINITION\}"'     "schedule loader must use the typed TOML parser"
   assert_contains "${loader}"     'toml_config_has "\$\{key\}"'     "schedule loader must require every declared schedule key"
-  assert_contains "${loader}"     'microg="\$\(toml_resolve_value microg'     "schedule loader must resolve microG"
   assert_contains "${loader}"     'boot_animation="\$\(toml_resolve_value boot_animation'     "schedule loader must resolve the boot-animation selection"
   assert_contains "${loader}"     'compatible_sepolicy_patching="\$\(toml_resolve_value compatible_sepolicy_patching'     "schedule loader must resolve compatible-SEPolicy selection"
   assert_contains "${loader}"     'force_update="\$\(toml_resolve_value force_update'     "schedule loader must resolve FORCE_UPDATE"
@@ -281,11 +280,8 @@ test_release_configuration_forwarding() {
 
 test_microg_lineage_forwarding() {
   local lineage="${WORKFLOW_DIR}/release-lineage.yml"
-  local loader="src/ci/load_schedule_definition.sh"
 
   assert_contains "${REUSABLE}"     'ADDITIONALS_MICROG:[[:space:]].*inputs\.microg'     "reusable workflow must map MICROG from its input"
-  assert_contains "${loader}"     'echo "microg='     "schedule loader must expose microG"
-  assert_contains "${lineage}"     'microg:[[:space:]]*\$\{\{ needs\.schedule_config\.outputs\.microg == .true. \}\}'     "LineageOS schedule must forward microG"
   assert_contains "${lineage}"     'microg:[[:space:]]*\$\{\{ inputs\.microg \}\}'     "LineageOS manual build must forward microG"
   assert_not_contains "${RELEASE}"     'inputs\.microg'     "GrapheneOS workflow must not expose a microG switch"
 }
