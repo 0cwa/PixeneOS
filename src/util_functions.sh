@@ -411,11 +411,13 @@ function prepare_microg() {
   local args_name="${1}"
   local helper_root="${2}"
   local -n args_ref="${args_name}"
-  local lock_path="${MICROG_LOCK}"
-  local cache_path="${MICROG_CACHE:-${WORKDIR}/locked-artifacts}"
+  local lock_relative='locks/microg-v0.3.15.250932.json'
+  local lock_path="${helper_root}/${lock_relative}"
+  local cache_path="${WORKDIR}/locked-artifacts"
   local profile_path="${WORKDIR}/locked-profiles/microg.toml"
-  local report_path="${MICROG_PATCH_REPORT:-${OUTPUTS[PATCHED_OTA]}.microg-patch-report.json}"
+  local report_path="${OUTPUTS[PATCHED_OTA]}.microg-patch-report.json"
   local module_tool="${helper_root}/module-tool.py"
+  local committed_lock working_lock
 
   if [[ "${ADDITIONALS[MICROG]}" != 'true' ]]; then
     return 0
@@ -428,38 +430,35 @@ function prepare_microg() {
     echo "Error: microG is supported only for LineageOS." >&2
     return 1
   fi
-  if ! verify_checked_in_locked_input "${lock_path}"; then
-    echo "Error: microG lock must be a clean checked-in regular file." >&2
+  if [[ ! -f "${lock_path}" || -L "${lock_path}" ||
+    ! -f "${module_tool}" || -L "${module_tool}" ]]; then
+    echo "Error: pinned helper lacks the reviewed microG lock/module tool." >&2
     return 1
   fi
-  if [[ ! -f "${module_tool}" || -L "${module_tool}" ]]; then
-    echo "Error: pinned helper lacks the locked module tool required by microG." >&2
+  git -C "${helper_root}" diff --quiet -- "${lock_relative}" || return 1
+  git -C "${helper_root}" diff --cached --quiet -- "${lock_relative}" || return 1
+  committed_lock="$(git -C "${helper_root}" rev-parse --verify "HEAD:${lock_relative}")" ||
     return 1
-  fi
+  working_lock="$(git -C "${helper_root}" hash-object -- "${lock_path}")" || return 1
+  [[ "${working_lock}" == "${committed_lock}" ]] || {
+    echo "Error: helper microG lock differs from the pinned commit." >&2
+    return 1
+  }
 
   write_microg_resolution_profile "${profile_path}" || return 1
 
-  if ! python "${module_tool}" resolve \
+  python "${module_tool}" resolve \
     --profile "${profile_path}" \
     --lock "${lock_path}" \
-    --format json >/dev/null; then
-    echo "Error: microG locked profile resolution failed." >&2
-    return 1
-  fi
-  if ! python "${module_tool}" artifacts fetch \
+    --format json >/dev/null || return 1
+  python "${module_tool}" artifacts fetch \
     --lock "${lock_path}" \
     --cache "${cache_path}" \
-    --module microg >/dev/null; then
-    echo "Error: microG locked artifact fetch failed." >&2
-    return 1
-  fi
-  if ! python "${module_tool}" artifacts verify \
+    --module microg >/dev/null || return 1
+  python "${module_tool}" artifacts verify \
     --lock "${lock_path}" \
     --cache "${cache_path}" \
-    --module microg >/dev/null; then
-    echo "Error: microG locked artifact verification failed." >&2
-    return 1
-  fi
+    --module microg >/dev/null || return 1
 
   args_ref+=(
     "--module-lock" "${lock_path}"
