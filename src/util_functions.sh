@@ -370,49 +370,41 @@ function prepare_fdroid_privileged_extension() {
 function write_microg_resolution_profile() {
   local profile_path="${1}"
   local root_mode='rootless'
-  local -a root_providers=()
-  local -a zygisk_providers=()
+  local providers='[]'
 
   resolve_root_mode >/dev/null || return 1
   if [[ "${RESOLVED_ROOT_MODE}" == 'magisk' ]]; then
     root_mode='rooted'
-    root_providers=(magisk)
-    zygisk_providers=(magisk)
+    providers="['magisk']"
   fi
 
   mkdir -p -- "$(dirname -- "${profile_path}")" || return 1
-  {
-    echo 'schema_version = 1'
-    echo "id = 'lineageos-microg-${root_mode}'"
-    echo "rom_family = 'lineageos'"
-    echo "root_mode = '${root_mode}'"
-    echo "abi = 'arm64-v8a'"
-    echo 'api_level = 36'
-    printf "output_scope = '%s'\n" "${OUTPUT_SCOPE}"
-    echo "enabled_modules = ['microg']"
-    echo 'acknowledgements = []'
-    echo 'experimental_acknowledgements = []'
-    echo
-    echo '[capabilities]'
-    if ((${#root_providers[@]})); then
-      echo "root_providers = ['magisk']"
-      echo "zygisk_providers = ['magisk']"
-    else
-      echo 'root_providers = []'
-      echo 'zygisk_providers = []'
-    fi
-    echo 'selective_signature_spoofing = true'
-    echo 'product_priv_app = true'
-    echo 'custom_init_selinux = false'
-  } >"${profile_path}"
+  cat >"${profile_path}" <<EOF
+schema_version = 1
+id = 'lineageos-microg-${root_mode}'
+rom_family = 'lineageos'
+root_mode = '${root_mode}'
+abi = 'arm64-v8a'
+api_level = 36
+output_scope = '${OUTPUT_SCOPE}'
+enabled_modules = ['microg']
+acknowledgements = []
+experimental_acknowledgements = []
+
+[capabilities]
+root_providers = ${providers}
+zygisk_providers = ${providers}
+selective_signature_spoofing = true
+product_priv_app = true
+custom_init_selinux = false
+EOF
 }
 
 function prepare_microg() {
   local args_name="${1}"
   local helper_root="${2}"
   local -n args_ref="${args_name}"
-  local lock_relative='locks/microg-v0.3.15.250932.json'
-  local lock_path="${helper_root}/${lock_relative}"
+  local lock_path="${helper_root}/locks/microg-v0.3.15.250932.json"
   local cache_path="${WORKDIR}/locked-artifacts"
   local profile_path="${WORKDIR}/locked-profiles/microg.toml"
   local report_path="${OUTPUTS[PATCHED_OTA]}.microg-patch-report.json"
@@ -420,10 +412,6 @@ function prepare_microg() {
 
   if [[ "${ADDITIONALS[MICROG]}" != 'true' ]]; then
     return 0
-  fi
-  if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' ]]; then
-    echo "Error: microG and F-Droid locked mode cannot share one helper lock/profile yet." >&2
-    return 1
   fi
   if [[ "${ROM_FAMILY}" != 'lineageos' ]]; then
     echo "Error: microG is supported only for LineageOS." >&2
@@ -435,16 +423,7 @@ function prepare_microg() {
     return 1
   fi
   write_microg_resolution_profile "${profile_path}" || return 1
-
-  python "${module_tool}" resolve \
-    --profile "${profile_path}" \
-    --lock "${lock_path}" \
-    --format json >/dev/null || return 1
   python "${module_tool}" artifacts fetch \
-    --lock "${lock_path}" \
-    --cache "${cache_path}" \
-    --module microg >/dev/null || return 1
-  python "${module_tool}" artifacts verify \
     --lock "${lock_path}" \
     --cache "${cache_path}" \
     --module microg >/dev/null || return 1
