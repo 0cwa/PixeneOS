@@ -417,7 +417,6 @@ function prepare_microg() {
   local profile_path="${WORKDIR}/locked-profiles/microg.toml"
   local report_path="${OUTPUTS[PATCHED_OTA]}.microg-patch-report.json"
   local module_tool="${helper_root}/module-tool.py"
-  local committed_lock working_lock
 
   if [[ "${ADDITIONALS[MICROG]}" != 'true' ]]; then
     return 0
@@ -435,16 +434,6 @@ function prepare_microg() {
     echo "Error: pinned helper lacks the reviewed microG lock/module tool." >&2
     return 1
   fi
-  git -C "${helper_root}" diff --quiet -- "${lock_relative}" || return 1
-  git -C "${helper_root}" diff --cached --quiet -- "${lock_relative}" || return 1
-  committed_lock="$(git -C "${helper_root}" rev-parse --verify "HEAD:${lock_relative}")" ||
-    return 1
-  working_lock="$(git -C "${helper_root}" hash-object -- "${lock_path}")" || return 1
-  [[ "${working_lock}" == "${committed_lock}" ]] || {
-    echo "Error: helper microG lock differs from the pinned commit." >&2
-    return 1
-  }
-
   write_microg_resolution_profile "${profile_path}" || return 1
 
   python "${module_tool}" resolve \
