@@ -158,6 +158,7 @@ function module_selection_fingerprint() {
     "bcr:BCR"
     "custota:CUSTOTA"
     "fdroid-privileged-extension:FDROID_PRIVILEGED_EXTENSION"
+    "microg:MICROG"
     "msd:MSD"
     "oemunlockonboot:OEMUNLOCKONBOOT"
   )
@@ -190,6 +191,12 @@ function module_selection_fingerprint() {
     fi
   fi
 
+  if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' &&
+    "${ADDITIONALS[MICROG]}" == 'true' ]]; then
+    echo "Error: F-Droid locked mode and microG cannot share one helper lock/profile yet." >&2
+    return 1
+  fi
+
   if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' ]]; then
     lock_digest="$(_locked_input_digest "${FDROID_PRIVILEGED_EXTENSION_LOCK}")" || {
       echo "Error: the F-Droid lock is not clean and checked in." >&2
@@ -197,6 +204,17 @@ function module_selection_fingerprint() {
     }
     profile_digest="$(_locked_input_digest "${FDROID_PRIVILEGED_EXTENSION_PROFILE}")" || {
       echo "Error: the F-Droid profile is not clean and checked in." >&2
+      return 1
+    }
+  fi
+
+  if [[ "${ADDITIONALS[MICROG]}" == 'true' ]]; then
+    if [[ "${ROM_FAMILY}" != 'lineageos' ]]; then
+      echo "Error: microG is supported only by the LineageOS profile." >&2
+      return 1
+    fi
+    lock_digest="$(_locked_input_digest "${MICROG_LOCK}")" || {
+      echo "Error: the microG lock is not clean and checked in." >&2
       return 1
     }
   fi
@@ -218,6 +236,7 @@ function module_selection_fingerprint() {
   SELECTION_MODULE_BCR="${ADDITIONALS[BCR]}"
   SELECTION_MODULE_CUSTOTA="${ADDITIONALS[CUSTOTA]}"
   SELECTION_MODULE_FDROID_PRIVILEGED_EXTENSION="${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}"
+  SELECTION_MODULE_MICROG="${ADDITIONALS[MICROG]}"
   SELECTION_MODULE_MSD="${ADDITIONALS[MSD]}"
   SELECTION_MODULE_OEMUNLOCKONBOOT="${ADDITIONALS[OEMUNLOCKONBOOT]}"
   SELECTION_BOOT_ANIMATION="${ADDITIONALS[BOOT_ANIMATION]}"
