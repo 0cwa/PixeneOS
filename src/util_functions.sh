@@ -557,12 +557,14 @@ function patch_ota() {
     return 1
   fi
 
-  # Preserve the existing F-Droid early-preparation path because callers may
-  # place its cache under the extraction tree.
+  # Locked module artifacts must be resolved, fetched, and verified before any
+  # OTA contents are unpacked. Keep the disabled path on its legacy ordering.
   if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' ]]; then
     rm -rf -- "${WORKDIR}/extracted/extracts/"
-    prepare_fdroid_privileged_extension \
-      locked_module_args "${my_avbroot_setup}" || return 1
+    if ! prepare_fdroid_privileged_extension \
+      locked_module_args "${my_avbroot_setup}"; then
+      return 1
+    fi
   fi
 
   # Extract the official public keys and certificates if not found
