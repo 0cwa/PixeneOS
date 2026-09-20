@@ -85,9 +85,9 @@ def _validate_description(data: bytes, part_names: set[str]) -> None:
         _reject("desc.txt has an invalid size or frame-rate line")
     for line in meaningful[1:]:
         match = re.fullmatch(
-            r"[pc]\\s+[0-9]+\\s+[0-9]+\\s+(part[0-9]+)"
-            r"(?:\\s+#[0-9A-Fa-f]{6}"
-            r"(?:\\s+(?:c|-?[0-9]+)(?:\\s+(?:c|-?[0-9]+))?)?"
+            r"[pc]\s+[0-9]+\s+[0-9]+\s+(part[0-9]+)"
+            r"(?:\s+#[0-9A-Fa-f]{6}"
+            r"(?:\s+(?:c|-?[0-9]+)(?:\s+(?:c|-?[0-9]+))?)?"
             r")?",
             line,
         )
