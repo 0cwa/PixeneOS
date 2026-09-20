@@ -52,6 +52,10 @@ setup_debug_module() {
   :
 }
 
+verify_requested_root_outputs() {
+  :
+}
+
 fail() {
   echo "$*" >&2
   exit 1
