@@ -608,6 +608,10 @@ function patch_ota() {
     # Python command to run the patch script
     python "${my_avbroot_setup}/patch.py" "${args[@]}" || return 1
 
+    # A Magisk label is publication metadata, not proof of root. Verify the
+    # generated boot target itself before producing/publishing rooted sidecars.
+    verify_requested_root_outputs || return 1
+
     if [[ "${RESOLVED_ROOT_MODE}" == 'both' ]]; then
       generate_custota_variant_sidecars         "${OUTPUTS[PATCHED_OTA_ROOTLESS]}"         "${OUTPUTS[OTA_METADATA_ROOTLESS]}" || return 1
       generate_custota_variant_sidecars         "${OUTPUTS[PATCHED_OTA_MAGISK]}"         "${OUTPUTS[OTA_METADATA_MAGISK]}" || return 1
@@ -616,6 +620,85 @@ function patch_ota() {
 
   # Deactivate the virtual environment after patching the OTA
   deactivate
+}
+
+function verify_magisk_ota() {
+  local ota_path="${1}"
+  local expected_preinit="${2}"
+  local partitions target temp_dir image_path magisk_info
+
+  [[ -f "${ota_path}" ]] || {
+    echo "Error: missing Magisk OTA for root verification: ${ota_path}" >&2
+    return 1
+  }
+
+  partitions="$(run_executable_tool avbroot ota list --input "${ota_path}")" ||
+    return 1
+  if grep -Fxq -- 'init_boot' <<<"${partitions}"; then
+    target='init_boot'
+  elif grep -Fxq -- 'boot' <<<"${partitions}"; then
+    target='boot'
+  else
+    echo "Error: Magisk OTA has no boot or init_boot partition." >&2
+    return 1
+  fi
+
+  temp_dir="$(mktemp -d "${WORKDIR}/magisk-verify.XXXXXX")" || return 1
+  if ! run_executable_tool avbroot ota extract \
+    --input "${ota_path}" \
+    --directory "${temp_dir}" \
+    --partition "${target}" >/dev/null; then
+    rm -rf -- "${temp_dir}"
+    return 1
+  fi
+
+  image_path="${temp_dir}/${target}.img"
+  if [[ ! -s "${image_path}" ]]; then
+    echo "Error: root verification did not extract ${target}.img." >&2
+    rm -rf -- "${temp_dir}"
+    return 1
+  fi
+
+  if ! magisk_info="$(run_executable_tool avbroot boot magisk-info \
+    --image "${image_path}" 2>&1)"; then
+    echo "Error: OTA labeled as Magisk is not Magisk-patched." >&2
+    rm -rf -- "${temp_dir}"
+    return 1
+  fi
+  rm -rf -- "${temp_dir}"
+
+  if ! grep -Fxq -- "PREINITDEVICE=${expected_preinit}" <<<"${magisk_info}"; then
+    echo "Error: Magisk OTA does not contain the expected PREINITDEVICE=${expected_preinit}." >&2
+    return 1
+  fi
+
+  echo "Verified Magisk root evidence in ${ota_path} (${target}, PREINITDEVICE=${expected_preinit})."
+}
+
+function verify_requested_root_outputs() {
+  local magisk_ota
+
+  case "${RESOLVED_ROOT_MODE}" in
+    rootless)
+      return 0
+      ;;
+    magisk)
+      magisk_ota="${OUTPUTS[PATCHED_OTA]}"
+      ;;
+    both)
+      magisk_ota="${OUTPUTS[PATCHED_OTA_MAGISK]}"
+      ;;
+    *)
+      echo "Error: cannot verify unknown resolved root mode: ${RESOLVED_ROOT_MODE}" >&2
+      return 1
+      ;;
+  esac
+
+  if ! verify_magisk_ota "${magisk_ota}" "${MAGISK[PREINIT]}"; then
+    rm -f -- "${magisk_ota}" "${magisk_ota}.csig"
+    echo "Error: refusing to keep or publish an unverified Magisk OTA." >&2
+    return 1
+  fi
 }
 
 function release_location_for_output() {
