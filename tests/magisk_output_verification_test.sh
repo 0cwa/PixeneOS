@@ -131,7 +131,7 @@ if verify_requested_root_outputs >/dev/null 2>&1; then
   fail "failed Magisk verification did not fail the build"
 fi
 [[ ! -e "${OUTPUTS[PATCHED_OTA_MAGISK]}" &&
-  ! -e "${OUTPUTS[PATCHED_OTA_MAGISK}.csig" ]] ||
+  ! -e "${OUTPUTS[PATCHED_OTA_MAGISK]}.csig" ]] ||
   fail "failed Magisk artifacts were not removed"
 
 grep -Fq 'verify_requested_root_outputs || return 1' src/util_functions.sh ||
