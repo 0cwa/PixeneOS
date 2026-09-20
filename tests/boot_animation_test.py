@@ -109,7 +109,7 @@ def main() -> None:
         with zipfile.ZipFile(extended_description, "w") as archive:
             archive.writestr(
                 "desc.txt",
-                "1440 1440 30\\np 0 0 part0 #000000 -1\\n",
+                "1440 1440 30\np 0 0 part0 #000000 -1\n",
             )
             archive.writestr("part0/frame.png", b"frame")
         validate_payload(extended_description)
