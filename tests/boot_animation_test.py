@@ -36,7 +36,16 @@ def assert_rejected(path: Path, context: str) -> None:
 def main() -> None:
     checked_in = Path("custom/boot-animation/bootanimation.zip")
     expected = hashlib.sha256(checked_in.read_bytes()).hexdigest()
-    assert validate_payload(checked_in) == expected
+    try:
+        assert validate_payload(checked_in) == expected
+    except BootAnimationError:
+        with zipfile.ZipFile(checked_in) as archive:
+            print("CHECKED_IN_DESC", repr(archive.read("desc.txt").decode("utf-8")))
+            print(
+                "CHECKED_IN_PARTS",
+                sorted({name.split("/", 1)[0] for name in archive.namelist() if "/" in name}),
+            )
+        raise
 
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
