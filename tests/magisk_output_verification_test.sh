@@ -125,7 +125,7 @@ verify_requested_root_outputs
   fail "paired mode verified the wrong OTA"
 
 printf 'bad ota' >"${OUTPUTS[PATCHED_OTA_MAGISK]}"
-printf 'bad csig' >"${OUTPUTS[PATCHED_OTA_MAGISK}.csig"
+printf 'bad csig' >"${OUTPUTS[PATCHED_OTA_MAGISK]}.csig"
 VERIFY_RESULT=failure
 if verify_requested_root_outputs >/dev/null 2>&1; then
   fail "failed Magisk verification did not fail the build"
