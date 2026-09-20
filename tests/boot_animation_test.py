@@ -36,16 +36,7 @@ def assert_rejected(path: Path, context: str) -> None:
 def main() -> None:
     checked_in = Path("custom/boot-animation/bootanimation.zip")
     expected = hashlib.sha256(checked_in.read_bytes()).hexdigest()
-    try:
-        assert validate_payload(checked_in) == expected
-    except BootAnimationError:
-        with zipfile.ZipFile(checked_in) as archive:
-            print("CHECKED_IN_DESC", repr(archive.read("desc.txt").decode("utf-8")))
-            print(
-                "CHECKED_IN_PARTS",
-                sorted({name.split("/", 1)[0] for name in archive.namelist() if "/" in name}),
-            )
-        raise
+    assert validate_payload(checked_in) == expected
 
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
@@ -113,6 +104,15 @@ def main() -> None:
             for index in range(MAX_MEMBER_COUNT + 1):
                 archive.writestr(f"part0/frame-{index}.png", b"x")
         assert_rejected(excessive, "member count")
+
+        extended_description = root / "extended-description.zip"
+        with zipfile.ZipFile(extended_description, "w") as archive:
+            archive.writestr(
+                "desc.txt",
+                "1440 1440 30\\np 0 0 part0 #000000 -1\\n",
+            )
+            archive.writestr("part0/frame.png", b"frame")
+        validate_payload(extended_description)
 
         invalid_description = root / "invalid-description.zip"
         with zipfile.ZipFile(invalid_description, "w") as archive:
