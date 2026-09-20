@@ -49,6 +49,7 @@ jobs:
           bash tests/upstream_integration_test.sh
           bash tests/scheduled_build_definitions_test.sh
           bash tests/root_mode_both_test.sh
+          bash tests/magisk_output_verification_test.sh
           bash tests/release_url_config_test.sh
           bash tests/release_existing_build_test.sh
           bash tests/release_existing_pair_test.sh
