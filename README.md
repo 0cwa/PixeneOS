@@ -4,6 +4,12 @@
 
 ModOS patches supported Android ROM OTA images with a selected set of modules while preserving AVB/OTA signing and update metadata. The maintained ROM profiles currently cover GrapheneOS and LineageOS. The project relies on upstream components from chenxiaolong and other projects, but keeps fork-specific release, trust, and compatibility policy in this repository.
 
+## Soft-fork maintenance
+
+ModOS is maintained as a soft fork of `pixincreate/PixeneOS`: upstream structure and fixes are preferred unless a fork-specific requirement needs a small, isolated extension. Fork-specific behavior should live behind typed configuration, ROM profiles, pinned helper contracts, or thin workflow triggers rather than copied build pipelines.
+
+The Actions inventory is intentionally small: the upstream-style CI, release, multi-device release, and Renovate workflows, plus the reusable shared ROM build and the thin LineageOS release trigger. CI enforces this inventory so temporary acceptance or one-shot workflows cannot be committed accidentally.
+
 ## Features
 
 - [BCR](https://github.com/chenxiaolong/BCR)
