@@ -608,8 +608,10 @@ function patch_ota() {
     # Python command to run the patch script
     python "${my_avbroot_setup}/patch.py" "${args[@]}" || return 1
 
-    # A Magisk label is publication metadata, not proof of root. Verify the
-    # generated boot target itself before producing/publishing rooted sidecars.
+    # A Magisk label is publication metadata, not proof of a working runtime
+    # root environment. Static CI can verify the Magisk boot patch and paired
+    # output separation, but /data/adb/magisk is provisioned on-device by
+    # Magisk's additional-setup/environment-fix flow.
     verify_requested_root_outputs || return 1
 
     if [[ "${RESOLVED_ROOT_MODE}" == 'both' ]]; then
@@ -622,13 +624,13 @@ function patch_ota() {
   deactivate
 }
 
-function verify_magisk_ota() {
+function extract_ota_boot_target() {
   local ota_path="${1}"
-  local expected_preinit="${2}"
-  local partitions target temp_dir image_path magisk_info
+  local directory="${2}"
+  local partitions target image_path
 
   [[ -f "${ota_path}" ]] || {
-    echo "Error: missing Magisk OTA for root verification: ${ota_path}" >&2
+    echo "Error: missing OTA for boot-target inspection: ${ota_path}" >&2
     return 1
   }
 
@@ -639,29 +641,42 @@ function verify_magisk_ota() {
   elif grep -Fxq -- 'boot' <<<"${partitions}"; then
     target='boot'
   else
-    echo "Error: Magisk OTA has no boot or init_boot partition." >&2
+    echo "Error: OTA has no boot or init_boot partition: ${ota_path}" >&2
     return 1
   fi
 
-  temp_dir="$(mktemp -d "${WORKDIR}/magisk-verify.XXXXXX")" || return 1
+  mkdir -p -- "${directory}" || return 1
   if ! run_executable_tool avbroot ota extract \
     --input "${ota_path}" \
-    --directory "${temp_dir}" \
+    --directory "${directory}" \
     --partition "${target}" >/dev/null; then
-    rm -rf -- "${temp_dir}"
     return 1
   fi
 
-  image_path="${temp_dir}/${target}.img"
-  if [[ ! -s "${image_path}" ]]; then
-    echo "Error: root verification did not extract ${target}.img." >&2
+  image_path="${directory}/${target}.img"
+  [[ -s "${image_path}" ]] || {
+    echo "Error: boot-target inspection did not extract ${target}.img." >&2
+    return 1
+  }
+
+  printf '%s\n' "${target}"
+}
+
+function verify_magisk_ota() {
+  local ota_path="${1}"
+  local expected_preinit="${2}"
+  local temp_dir target image_path magisk_info
+
+  temp_dir="$(mktemp -d "${WORKDIR}/magisk-verify.XXXXXX")" || return 1
+  target="$(extract_ota_boot_target "${ota_path}" "${temp_dir}")" || {
     rm -rf -- "${temp_dir}"
     return 1
-  fi
+  }
+  image_path="${temp_dir}/${target}.img"
 
   if ! magisk_info="$(run_executable_tool avbroot boot magisk-info \
     --image "${image_path}" 2>&1)"; then
-    echo "Error: OTA labeled as Magisk is not Magisk-patched." >&2
+    echo "Error: OTA labeled as Magisk has no detectable Magisk boot patch." >&2
     rm -rf -- "${temp_dir}"
     return 1
   fi
@@ -672,7 +687,55 @@ function verify_magisk_ota() {
     return 1
   fi
 
-  echo "Verified Magisk root evidence in ${ota_path} (${target}, PREINITDEVICE=${expected_preinit})."
+  echo "Verified Magisk boot-patch evidence in ${ota_path} (${target}, PREINITDEVICE=${expected_preinit})."
+}
+
+function verify_paired_root_outputs() {
+  local rootless_ota="${1}"
+  local magisk_ota="${2}"
+  local temp_dir rootless_dir magisk_dir
+  local rootless_target magisk_target rootless_image magisk_image
+  local rootless_digest magisk_digest
+
+  temp_dir="$(mktemp -d "${WORKDIR}/root-pair-verify.XXXXXX")" || return 1
+  rootless_dir="${temp_dir}/rootless"
+  magisk_dir="${temp_dir}/magisk"
+
+  rootless_target="$(extract_ota_boot_target "${rootless_ota}" "${rootless_dir}")" || {
+    rm -rf -- "${temp_dir}"
+    return 1
+  }
+  magisk_target="$(extract_ota_boot_target "${magisk_ota}" "${magisk_dir}")" || {
+    rm -rf -- "${temp_dir}"
+    return 1
+  }
+
+  if [[ "${rootless_target}" != "${magisk_target}" ]]; then
+    echo "Error: paired outputs selected different Magisk boot targets: rootless=${rootless_target}, magisk=${magisk_target}." >&2
+    rm -rf -- "${temp_dir}"
+    return 1
+  fi
+
+  rootless_image="${rootless_dir}/${rootless_target}.img"
+  magisk_image="${magisk_dir}/${magisk_target}.img"
+  rootless_digest="$(sha256sum -- "${rootless_image}" | awk '{print $1}')"
+  magisk_digest="$(sha256sum -- "${magisk_image}" | awk '{print $1}')"
+
+  if [[ "${rootless_digest}" == "${magisk_digest}" ]]; then
+    echo "Error: paired rootless and Magisk outputs have identical ${magisk_target} images." >&2
+    rm -rf -- "${temp_dir}"
+    return 1
+  fi
+
+  if run_executable_tool avbroot boot magisk-info \
+    --image "${rootless_image}" >/dev/null 2>&1; then
+    echo "Error: paired rootless output unexpectedly contains Magisk boot evidence." >&2
+    rm -rf -- "${temp_dir}"
+    return 1
+  fi
+
+  rm -rf -- "${temp_dir}"
+  echo "Verified paired boot targets differ and the rootless ${rootless_target} has no Magisk evidence."
 }
 
 function verify_requested_root_outputs() {
@@ -696,7 +759,14 @@ function verify_requested_root_outputs() {
 
   if ! verify_magisk_ota "${magisk_ota}" "${MAGISK[PREINIT]}"; then
     rm -f -- "${magisk_ota}" "${magisk_ota}.csig"
-    echo "Error: refusing to keep or publish an unverified Magisk OTA." >&2
+    echo "Error: refusing to keep or publish an OTA without verified Magisk boot-patch evidence." >&2
+    return 1
+  fi
+
+  if [[ "${RESOLVED_ROOT_MODE}" == both ]] &&
+    ! verify_paired_root_outputs "${OUTPUTS[PATCHED_OTA_ROOTLESS]}" "${magisk_ota}"; then
+    rm -f -- "${magisk_ota}" "${magisk_ota}.csig"
+    echo "Error: refusing to keep or publish an invalid rootless/Magisk output pair." >&2
     return 1
   fi
 }
