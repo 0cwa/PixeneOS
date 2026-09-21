@@ -13,7 +13,8 @@ mkdir -p "${WORKDIR}"
 
 PARTITIONS=$'boot\ninit_boot\nvendor_boot'
 MAGISK_INFO='PREINITDEVICE=sda10'
-EXTRACTED_TARGET=''
+EXTRACT_LOG="${TEST_ROOT}/extract.log"
+: >"${EXTRACT_LOG}"
 EXTRACT_IDENTICAL=false
 ROOTLESS_HAS_MAGISK=false
 VERIFY_CALLS=()
@@ -65,7 +66,7 @@ run_executable_tool() {
       else
         printf 'magisk-boot-image' >"${directory}/${partition}.img"
       fi
-      EXTRACTED_TARGET="${partition}"
+      printf '%s\n' "${partition}" >>"${EXTRACT_LOG}"
       ;;
     'boot magisk-info')
       local image=''
@@ -100,14 +101,13 @@ printf 'ota' >"${ota}"
 
 verify_magisk_ota "${ota}" sda10 >/dev/null ||
   fail "valid Magisk OTA boot-patch verification failed"
-[[ "${EXTRACTED_TARGET}" == init_boot ]] ||
+[[ "$(tail -n1 "${EXTRACT_LOG}")" == init_boot ]] ||
   fail "init_boot was not preferred over boot"
 
 PARTITIONS='boot'
-EXTRACTED_TARGET=''
 verify_magisk_ota "${ota}" sda10 >/dev/null ||
   fail "boot fallback verification failed"
-[[ "${EXTRACTED_TARGET}" == boot ]] ||
+[[ "$(tail -n1 "${EXTRACT_LOG}")" == boot ]] ||
   fail "boot fallback was not selected"
 
 PARTITIONS=$'boot\ninit_boot'
