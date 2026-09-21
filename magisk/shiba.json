@@ -1,7 +1,0 @@
-{
-  "version": 2,
-  "full": {
-    "location_ota": "https://github.com/0cwa/PixeneOS/releases/download/2026091000/shiba-2026091000-magisk-v31.0-6e675614de33ddfb11c4433c82c1b5cbffc393134ad349579554b45db33c2b4c-6a6d006.zip",
-    "location_csig": "https://github.com/0cwa/PixeneOS/releases/download/2026091000/shiba-2026091000-magisk-v31.0-6e675614de33ddfb11c4433c82c1b5cbffc393134ad349579554b45db33c2b4c-6a6d006.zip.csig"
-  }
-}
