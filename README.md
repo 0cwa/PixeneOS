@@ -1,8 +1,8 @@
-# PixeneOS
+# ModOS (based off PixeneOS)
 
 ## Description
 
-PixeneOS patches supported Android ROM OTA images with a selected set of modules while preserving AVB/OTA signing and update metadata. The maintained ROM profiles currently cover GrapheneOS and LineageOS. The project relies on upstream components from chenxiaolong and other projects, but keeps fork-specific release, trust, and compatibility policy in this repository.
+ModOS patches supported Android ROM OTA images with a selected set of modules while preserving AVB/OTA signing and update metadata. The maintained ROM profiles currently cover GrapheneOS and LineageOS. The project relies on upstream components from chenxiaolong and other projects, but keeps fork-specific release, trust, and compatibility policy in this repository.
 
 ## Features
 
@@ -17,7 +17,7 @@ PixeneOS patches supported Android ROM OTA images with a selected set of modules
 
 > [!NOTE]
 >
-> 1. PixeneOS is not affiliated with GrapheneOS, LineageOS, or the upstream projects it integrates.
+> 1. ModOS is not affiliated with GrapheneOS, LineageOS, or the upstream projects it integrates.
 > 2. Linux is the supported host platform for the complete patching workflow.
 
 ## Requirements
