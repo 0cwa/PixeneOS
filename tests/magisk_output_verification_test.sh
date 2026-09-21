@@ -209,7 +209,7 @@ fi
 
 grep -Fq 'verify_requested_root_outputs || return 1' src/util_functions.sh ||
   fail "patch pipeline does not enforce Magisk output verification"
-grep -Fq 'working runtime root environment' src/util_functions.sh ||
+grep -Fq 'not proof of a working runtime' src/util_functions.sh ||
   fail "patch pipeline still overstates static Magisk verification as runtime root"
 
 echo "Magisk output verification tests passed"
