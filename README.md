@@ -179,6 +179,16 @@ Root changes the device security model and can introduce compatibility breakage 
 
 PixeneOS defaults to the GrapheneOS-oriented `pixincreate/Magisk` fork. The repository is configurable through `MAGISK[REPOSITORY]` in `env.toml`; use another source only after confirming compatibility with the selected ROM. Magisk/Zygisk behavior can change across releases, so rooted builds should be revalidated after ROM or Magisk updates.
 
+A Magisk-patched OTA is only the boot-image half of a working Magisk installation. On a clean install, after a data wipe, or whenever Magisk reports that additional setup is required, install/open the **matching Magisk manager APK**, accept **Additional setup / Environment fix**, and allow the device to reboot. That step provisions the runtime binaries (including `su`) under `/data/adb/magisk`; those files are device state and cannot be embedded in or verified from an OTA image.
+
+After that reboot, verify runtime root on the actual device:
+
+```shell
+adb shell su -c id
+```
+
+A working setup should report `uid=0(root)`. ModOS CI verifies that the Magisk OTA has a distinct Magisk-patched boot target with the configured preinit device; it deliberately does **not** call that static check proof of runtime root.
+
 For one build flavor, the existing boolean `ROOT` remains supported (`false` = rootless, `true` = Magisk). `ROOT_MODE` is an optional string override with `rootless`, `magisk`, or `both`. `both` prepares the OTA and shared modules once, then emits the normal rootless and Magisk variants from the same prepared image set. Each output keeps its own module-selection fingerprint, Custota signature, update metadata, and `/rootless/` or `/magisk/` publication pointer.
 
 KernelSU is not integrated by this repository. Adding another root implementation would require an explicit compatibility and signature-verification design rather than treating it as interchangeable with Magisk.
