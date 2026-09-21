@@ -84,14 +84,11 @@ on:
         required: false
 
 env:
-  CARGO_INCREMENTAL: 1
   DEVICE_NAME: ${{ inputs.device-id }}
   INTERACTIVE_MODE: false
   ROM_FAMILY: ${{ inputs.rom-family }}
   GRAPHENEOS_UPDATE_CHANNEL: ${{ inputs.update-channel }}
   OUTPUT_SCOPE: ${{ inputs.publish && inputs.release-type != 'build-only' && 'published' || 'local-unpublished' }}
-  RUST_BACKTRACE: short
-  RUSTUP_MAX_RETRIES: 10
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   RELEASE_TYPE: ${{ inputs.release-type }}
   ROOT_MODE: ${{ inputs.root-mode }}
