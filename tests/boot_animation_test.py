@@ -34,18 +34,16 @@ def assert_rejected(path: Path, context: str) -> None:
 
 
 def main() -> None:
+    checked_in = Path("custom/boot-animation/bootanimation.zip")
+    expected = hashlib.sha256(checked_in.read_bytes()).hexdigest()
+    assert validate_payload(checked_in) == expected
+
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
         valid = root / "bootanimation.zip"
         write_valid(valid)
         expected = hashlib.sha256(valid.read_bytes()).hexdigest()
         assert validate_payload(valid) == expected
-
-        repository_payload = Path("custom/boot-animation/bootanimation.zip")
-        assert repository_payload.is_file()
-        assert validate_payload(repository_payload) == hashlib.sha256(
-            repository_payload.read_bytes()
-        ).hexdigest()
 
         desc_only = root / "desc-only.zip"
         with zipfile.ZipFile(desc_only, "w") as archive:
@@ -103,10 +101,18 @@ def main() -> None:
 
         excessive = root / "excessive.zip"
         with zipfile.ZipFile(excessive, "w") as archive:
-            archive.writestr("desc.txt", "1 1 1\np 1 0 part0\n")
-            for index in range(MAX_MEMBER_COUNT):
+            for index in range(MAX_MEMBER_COUNT + 1):
                 archive.writestr(f"part0/frame-{index}.png", b"x")
         assert_rejected(excessive, "member count")
+
+        extended_description = root / "extended-description.zip"
+        with zipfile.ZipFile(extended_description, "w") as archive:
+            archive.writestr(
+                "desc.txt",
+                "1440 1440 30\np 0 0 part0 #000000 -1\n",
+            )
+            archive.writestr("part0/frame.png", b"frame")
+        validate_payload(extended_description)
 
         invalid_description = root / "invalid-description.zip"
         with zipfile.ZipFile(invalid_description, "w") as archive:
