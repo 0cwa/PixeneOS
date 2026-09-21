@@ -49,8 +49,12 @@ run_variant() {
   printf '%s' "${result}"
 }
 
-: "${EXPECTED_VARIANT_ROOTLESS:?EXPECTED_VARIANT_ROOTLESS is required}"
-: "${EXPECTED_VARIANT_MAGISK:?EXPECTED_VARIANT_MAGISK is required}"
+if [[ ! "${EXPECTED_VARIANT_ROOTLESS:-}" =~ ^[0-9a-f]{64}$ ||
+  ! "${EXPECTED_VARIANT_MAGISK:-}" =~ ^[0-9a-f]{64}$ ]]; then
+  echo "::warning::Paired selection identity is unavailable; building both variants."
+  [[ -n "${GITHUB_OUTPUT:-}" ]] && echo 'should_build=true' >>"${GITHUB_OUTPUT}"
+  exit 0
+fi
 
 rootless_result="$(run_variant false "${EXPECTED_VARIANT_ROOTLESS}")"
 if [[ "${rootless_result}" == true ]]; then
