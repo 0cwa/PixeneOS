@@ -200,6 +200,8 @@ jobs:
           {
             echo "GRAPHENEOS_OTA_TARGET=${GRAPHENEOS[OTA_TARGET]}"
             echo "GRAPHENEOS_VERSION=${VERSION[GRAPHENEOS]}"
+            echo "MAGISK_REPOSITORY=${MAGISK[REPOSITORY]}"
+            echo "MAGISK_VERSION=${VERSION[MAGISK]}"
             echo "MODULE_SELECTION_FINGERPRINT=${MODULE_SELECTION_FINGERPRINT}"
             echo "MODULE_SELECTION_FINGERPRINT_ROOTLESS=${MODULE_SELECTION_FINGERPRINT_ROOTLESS}"
             echo "MODULE_SELECTION_FINGERPRINT_MAGISK=${MODULE_SELECTION_FINGERPRINT_MAGISK}"
@@ -312,6 +314,12 @@ jobs:
               echo "Magisk module-selection fingerprint: ${MODULE_SELECTION_FINGERPRINT_MAGISK}"
             else
               echo "Module-selection fingerprint: ${MODULE_SELECTION_FINGERPRINT}"
+            fi
+            if [[ "${ROOT_MODE_RESOLVED}" == magisk || "${ROOT_MODE_RESOLVED}" == both ]]; then
+              echo
+              echo "Magisk boot patch: statically verified during the build."
+              echo "Runtime root bootstrap: install/open the matching ${MAGISK_REPOSITORY} ${MAGISK_VERSION} manager, complete Additional setup / Environment fix when prompted, then reboot."
+              echo "Runtime verification: adb shell su -c id"
             fi
           } > "${GITHUB_WORKSPACE}-CHANGELOG.txt"
 
