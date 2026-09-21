@@ -22,7 +22,7 @@ from typing import Any
 
 
 MAX_ARCHIVE_BYTES = 16 * 1024 * 1024
-MAX_MEMBER_COUNT = 64
+MAX_MEMBER_COUNT = 4096
 MAX_MEMBER_BYTES = 16 * 1024 * 1024
 MAX_UNCOMPRESSED_BYTES = 64 * 1024 * 1024
 MAX_COMPRESSION_RATIO = 200
@@ -84,7 +84,13 @@ def _validate_description(data: bytes, part_names: set[str]) -> None:
     if not meaningful or not re.fullmatch(r"[1-9][0-9]*\s+[1-9][0-9]*\s+[1-9][0-9]*", meaningful[0]):
         _reject("desc.txt has an invalid size or frame-rate line")
     for line in meaningful[1:]:
-        match = re.fullmatch(r"[pc]\s+[0-9]+\s+[0-9]+\s+(part[0-9]+)", line)
+        match = re.fullmatch(
+            r"[pc]\s+[0-9]+\s+[0-9]+\s+(part[0-9]+)"
+            r"(?:\s+#[0-9A-Fa-f]{6}"
+            r"(?:\s+(?:c|-?[0-9]+)(?:\s+(?:c|-?[0-9]+))?)?"
+            r")?",
+            line,
+        )
         if not match or match.group(1) not in part_names:
             _reject("desc.txt references an invalid animation part")
 

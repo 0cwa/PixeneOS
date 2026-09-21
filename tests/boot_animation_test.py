@@ -13,6 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from boot_animation import (  # noqa: E402
+    MAX_MEMBER_COUNT,
     BootAnimationError,
     validate_payload,
 )
@@ -33,6 +34,10 @@ def assert_rejected(path: Path, context: str) -> None:
 
 
 def main() -> None:
+    checked_in = Path("custom/boot-animation/bootanimation.zip")
+    expected = hashlib.sha256(checked_in.read_bytes()).hexdigest()
+    assert validate_payload(checked_in) == expected
+
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
         valid = root / "bootanimation.zip"
@@ -96,9 +101,18 @@ def main() -> None:
 
         excessive = root / "excessive.zip"
         with zipfile.ZipFile(excessive, "w") as archive:
-            for index in range(65):
+            for index in range(MAX_MEMBER_COUNT + 1):
                 archive.writestr(f"part0/frame-{index}.png", b"x")
         assert_rejected(excessive, "member count")
+
+        extended_description = root / "extended-description.zip"
+        with zipfile.ZipFile(extended_description, "w") as archive:
+            archive.writestr(
+                "desc.txt",
+                "1440 1440 30\np 0 0 part0 #000000 -1\n",
+            )
+            archive.writestr("part0/frame.png", b"frame")
+        validate_payload(extended_description)
 
         invalid_description = root / "invalid-description.zip"
         with zipfile.ZipFile(invalid_description, "w") as archive:
