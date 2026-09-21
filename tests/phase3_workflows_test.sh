@@ -203,6 +203,14 @@ test_reusable_workflow() {
     "${REUSABLE}" \
     'enforce_publication_evidence' \
     "shared workflow must enforce publication evidence"
+  assert_contains \
+    "${REUSABLE}" \
+    'MODULE_SELECTION_FINGERPRINT="\$\{MODULE_SELECTION_FINGERPRINT_ROOTLESS\}"' \
+    "paired rootless cleanup must bind the rootless fingerprint"
+  assert_contains \
+    "${REUSABLE}" \
+    'MODULE_SELECTION_FINGERPRINT="\$\{MODULE_SELECTION_FINGERPRINT_MAGISK\}"' \
+    "paired Magisk cleanup must bind the Magisk fingerprint"
   assert_not_contains \
     "${REUSABLE}" \
     'actions/upload-artifact@' \
