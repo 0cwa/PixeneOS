@@ -66,23 +66,23 @@ run_case both-present false false false 2
 run_case rootless-missing true false true 1
 run_case magisk-missing false true true 2
 
-unresolved_out="${TEST_ROOT}/unresolved.out"
-unresolved_calls="${TEST_ROOT}/unresolved.calls"
-: >"${unresolved_out}"
-: >"${unresolved_calls}"
+out="${TEST_ROOT}/unresolved.out"
+calls="${TEST_ROOT}/unresolved.calls"
+: >"${out}"
+: >"${calls}"
 ROOTLESS_RESULT=false \
 MAGISK_RESULT=false \
-CALL_LOG="${unresolved_calls}" \
+CALL_LOG="${calls}" \
 CHECK_EXISTING_BUILD_SCRIPT="${FAKE_CHECKER}" \
 EXPECTED_VARIANT_ROOTLESS='' \
 EXPECTED_VARIANT_MAGISK='' \
-GITHUB_OUTPUT="${unresolved_out}" \
+GITHUB_OUTPUT="${out}" \
 GITHUB_ENV="${TEST_ROOT}/unresolved.env" \
   bash src/ci/check_existing_pair.sh >/dev/null
 
-grep -Fxq 'should_build=true' "${unresolved_out}" ||
-  fail "unresolved paired identity did not request a build"
-[[ ! -s "${unresolved_calls}" ]] ||
-  fail "unresolved paired identity unexpectedly queried release assets"
+grep -Fxq 'should_build=true' "${out}" ||
+  fail "unresolved identities did not force a build"
+[[ ! -s "${calls}" ]] ||
+  fail "unresolved identities unexpectedly queried release assets"
 
 echo "paired existing-build preflight tests passed"
