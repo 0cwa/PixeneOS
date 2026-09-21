@@ -207,4 +207,4 @@ test_invalid_grapheneos_metadata_fails_closed
 test_unsafe_grapheneos_device_fails_closed
 test_unsafe_lineageos_metadata_fails_closed
 
-echo "Phase 3 provider acquisition tests passed"
+echo "Provider acquisition tests passed"

@@ -269,4 +269,4 @@ test_selection_fingerprint
 test_output_filename_contains_fingerprint
 test_output_policy
 
-echo "Phase 3 ROM contract tests passed"
+echo "ROM contract tests passed"
