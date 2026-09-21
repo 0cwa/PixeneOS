@@ -16,6 +16,7 @@ function selection_variant_manifest() {
     SELECTION_OUTPUT_SCOPE
     SELECTION_ROOT
     SELECTION_MAGISK_PREINIT
+    SELECTION_MAGISK_REPOSITORY
     SELECTION_DEBUG
     SELECTION_COMPATIBLE_SEPOLICY
     SELECTION_CLEAR_VBMETA_FLAGS
@@ -96,6 +97,14 @@ function selection_variant_manifest() {
     "module.fdroid-privileged-extension=${SELECTION_MODULE_FDROID_PRIVILEGED_EXTENSION}" \
     "module.msd=${SELECTION_MODULE_MSD}" \
     "module.oemunlockonboot=${SELECTION_MODULE_OEMUNLOCKONBOOT}"
+
+  if [[ "${SELECTION_ROOT}" == 'true' ]]; then
+    if [[ ! "${SELECTION_MAGISK_REPOSITORY}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+      echo "Error: rooted selection identity has an invalid Magisk repository." >&2
+      return 1
+    fi
+    printf '%s\n' "magisk_repository=${SELECTION_MAGISK_REPOSITORY}"
+  fi
 
   if [[ "${SELECTION_BOOT_ANIMATION}" == 'true' ]]; then
     printf '%s\n' \

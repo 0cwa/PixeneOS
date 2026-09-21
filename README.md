@@ -177,7 +177,7 @@ It is easier to use the web installer to flash GrapheneOS. However, it is recomm
 
 Root changes the device security model and can introduce compatibility breakage across ROM updates. Use it only when you understand the trade-offs for your device and selected ROM.
 
-PixeneOS defaults to the GrapheneOS-oriented `pixincreate/Magisk` fork. The repository is configurable through `MAGISK[REPOSITORY]` in `env.toml`; use another source only after confirming compatibility with the selected ROM. Magisk/Zygisk behavior can change across releases, so rooted builds should be revalidated after ROM or Magisk updates.
+ModOS defaults to the official `topjohnwu/Magisk` repository. The source remains configurable through `MAGISK[REPOSITORY]` in `env.toml`, but alternate Magisk forks are opt-in rather than part of the GrapheneOS build contract. If you use Zygisk Next for GrapheneOS compatibility, install and manage it separately from the OTA build. Magisk/Zygisk behavior can change across releases, so rooted builds should be revalidated after ROM, Magisk, or Zygisk changes.
 
 A Magisk-patched OTA is only the boot-image half of a working Magisk installation. On a clean install, after a data wipe, or whenever Magisk reports that additional setup is required, install/open the **matching Magisk manager APK**, accept **Additional setup / Environment fix**, and allow the device to reboot. That step provisions the runtime binaries (including `su`) under `/data/adb/magisk`; those files are device state and cannot be embedded in or verified from an OTA image.
 
