@@ -49,21 +49,24 @@ run_variant() {
   printf '%s' "${result}"
 }
 
-if [[ ! "${EXPECTED_VARIANT_ROOTLESS:-}" =~ ^[0-9a-f]{64}$ ||
-  ! "${EXPECTED_VARIANT_MAGISK:-}" =~ ^[0-9a-f]{64}$ ]]; then
-  echo "::warning::Paired selection identity is unavailable; building both variants."
+expected_rootless="${EXPECTED_VARIANT_ROOTLESS:-}"
+expected_magisk="${EXPECTED_VARIANT_MAGISK:-}"
+
+if [[ ! "${expected_rootless}" =~ ^[0-9a-f]{64}$ ||
+  ! "${expected_magisk}" =~ ^[0-9a-f]{64}$ ]]; then
+  echo "Paired selection identity is unavailable; continuing with a build."
   [[ -n "${GITHUB_OUTPUT:-}" ]] && echo 'should_build=true' >>"${GITHUB_OUTPUT}"
   exit 0
 fi
 
-rootless_result="$(run_variant false "${EXPECTED_VARIANT_ROOTLESS}")"
+rootless_result="$(run_variant false "${expected_rootless}")"
 if [[ "${rootless_result}" == true ]]; then
   echo "Rootless variant requires a build; paired build will produce both variants."
   [[ -n "${GITHUB_OUTPUT:-}" ]] && echo 'should_build=true' >>"${GITHUB_OUTPUT}"
   exit 0
 fi
 
-magisk_result="$(run_variant true "${EXPECTED_VARIANT_MAGISK}")"
+magisk_result="$(run_variant true "${expected_magisk}")"
 if [[ "${magisk_result}" == true ]]; then
   echo "Magisk variant requires a build; paired build will produce both variants."
   [[ -n "${GITHUB_OUTPUT:-}" ]] && echo 'should_build=true' >>"${GITHUB_OUTPUT}"
