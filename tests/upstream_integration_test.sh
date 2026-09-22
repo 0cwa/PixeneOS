@@ -13,6 +13,7 @@ grep -Fq 'VERSION[CUSTOTA]="${VERSION[CUSTOTA]:-6.5}"' src/declarations.sh || fa
 grep -Fq 'VERSION[AVBROOT_SETUP]="634e6185cf70ea3ec9229ae957ddf2304f52e9e8"' src/declarations.sh || fail "maintained helper pin is unexpected"
 grep -Fq '"version": "2.0.0"' locks/executable-tools-v1.json || fail "AFSR 2.0 lock entry is missing"
 grep -Fq "topjohnwu/Magisk" src/config_schema.sh || fail "official Magisk default is missing"
+grep -Fq "VERSION array MAGISK MAGISK_VERSION v30.7" src/config_schema.sh || fail "Magisk v30.7 compatibility pin is missing"
 if grep -Fq "pixincreate/Magisk" src/config_schema.sh; then
   fail "pixincreate Magisk must remain opt-in rather than the default"
 fi

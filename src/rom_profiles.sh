@@ -151,6 +151,7 @@ function module_selection_fingerprint() {
   local profile_digest="disabled"
   local magisk_preinit="disabled"
   local magisk_repository="disabled"
+  local magisk_version="disabled"
   local boot_animation_digest="disabled"
   local entry
   local -a module_entries=(
@@ -186,12 +187,17 @@ function module_selection_fingerprint() {
   if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
     magisk_preinit="${MAGISK[PREINIT]}"
     magisk_repository="${MAGISK[REPOSITORY]}"
+    magisk_version="${VERSION[MAGISK]}"
     if [[ ! "${magisk_preinit}" =~ ^[A-Za-z0-9._-]+$ ]]; then
       echo "Error: rooted profiles require a canonical Magisk preinit device." >&2
       return 1
     fi
     if [[ ! "${magisk_repository}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
       echo "Error: rooted profiles require a canonical Magisk repository." >&2
+      return 1
+    fi
+    if [[ ! "${magisk_version}" =~ ^v[0-9]+([.][0-9A-Za-z_-]+)*$ ]]; then
+      echo "Error: rooted profiles require a canonical Magisk version tag." >&2
       return 1
     fi
   fi
@@ -214,6 +220,7 @@ function module_selection_fingerprint() {
   SELECTION_ROOT="${ADDITIONALS[ROOT]}"
   SELECTION_MAGISK_PREINIT="${magisk_preinit}"
   SELECTION_MAGISK_REPOSITORY="${magisk_repository}"
+  SELECTION_MAGISK_VERSION="${magisk_version}"
   SELECTION_DEBUG="${ADDITIONALS[DEBUG]}"
   SELECTION_COMPATIBLE_SEPOLICY="${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}"
   SELECTION_CLEAR_VBMETA_FLAGS="${ROM_PROFILE[CLEAR_VBMETA_FLAGS]}"
