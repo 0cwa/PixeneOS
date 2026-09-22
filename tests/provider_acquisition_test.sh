@@ -43,6 +43,24 @@ reset_acquisition_fixture() {
   ADDITIONALS_MAS_COMPATIBLE_SEPOLICY=""
 }
 
+test_pinned_magisk_version_skips_tag_discovery() (
+  reset_acquisition_fixture
+  ROM_FAMILY="grapheneos"
+  DEVICE_NAME="shiba"
+  VERSION[MAGISK]="v30.7"
+
+  git() { fail "pinned Magisk version unexpectedly queried git tags"; }
+  curl() {
+    local url="${!#}"
+    [[ "${url}" == "https://releases.grapheneos.org/shiba-stable" ]] ||
+      fail "unexpected GrapheneOS metadata URL: ${url}"
+    printf '%s\n' '2026071700 1784260800'
+  }
+
+  get_latest_version >/dev/null
+  assert_equals "v30.7" "${VERSION[MAGISK]}" "pinned Magisk version"
+)
+
 test_grapheneos_text_metadata() (
   reset_acquisition_fixture
   ROM_FAMILY="grapheneos"
@@ -200,6 +218,7 @@ test_unsafe_lineageos_metadata_fails_closed() (
   fi
 )
 
+test_pinned_magisk_version_skips_tag_discovery
 test_grapheneos_text_metadata
 test_lineageos_v2_metadata
 test_lineageos_digest_verification
