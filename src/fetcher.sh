@@ -8,7 +8,7 @@ source src/declarations.sh
 source src/rom_profiles.sh
 source src/ota_providers.sh
 
-# Fetch the latest version of GrapheneOS and Magisk and sets up the OTA URL
+# Resolve the ROM version plus the configured Magisk compatibility version
 function get_latest_version() {
   local selected_magisk_version="${VERSION[MAGISK]:-}"
 
