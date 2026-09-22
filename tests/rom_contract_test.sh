@@ -77,10 +77,12 @@ test_profiles_are_stable() {
     https://download.lineageos.org/api/v2
 }
 
-test_magisk_repository_default() (
+test_magisk_compatibility_defaults() (
   load_contract
   assert_equals "topjohnwu/Magisk" "${MAGISK[REPOSITORY]}" \
     "default Magisk repository"
+  assert_equals "v30.7" "${VERSION[MAGISK]}" \
+    "default Magisk compatibility version"
 )
 
 test_unknown_rom_fails_closed() (
@@ -132,7 +134,7 @@ fingerprint() {
 test_selection_fingerprint() (
   local baseline repeated afsr_on afsr_off root_changed rom_changed module_changed
   local boot_changed second_boot_changed fingerprint_input
-  local rootless_repo_changed rooted_repo_changed
+  local rootless_repo_changed rooted_repo_changed rooted_version_changed
 
   load_contract
   set_selection_fixture
@@ -179,6 +181,12 @@ test_selection_fingerprint() (
   [[ "${rooted_repo_changed}" != "${root_changed}" ]] ||
     fail "Magisk repository selection did not change the rooted fingerprint"
   MAGISK[REPOSITORY]="topjohnwu/Magisk"
+
+  VERSION[MAGISK]="v30.6"
+  rooted_version_changed="$(fingerprint)"
+  [[ "${rooted_version_changed}" != "${root_changed}" ]] ||
+    fail "Magisk version selection did not change the rooted fingerprint"
+  VERSION[MAGISK]="v30.7"
 
   MAGISK[PREINIT]="sda47"
   local preinit_changed
@@ -282,7 +290,7 @@ test_output_policy() (
 )
 
 test_profiles_are_stable
-test_magisk_repository_default
+test_magisk_compatibility_defaults
 test_unknown_rom_fails_closed
 test_invalid_compatible_sepolicy_fails_closed
 test_selection_fingerprint
