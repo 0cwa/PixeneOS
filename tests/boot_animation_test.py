@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import stat
 import sys
 import tempfile
@@ -14,6 +15,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from boot_animation import (  # noqa: E402
     BootAnimationError,
+    build_runtime_payload,
+    install_runtime_payload,
     validate_payload,
 )
 
@@ -32,7 +35,72 @@ def assert_rejected(path: Path, context: str) -> None:
     raise AssertionError(f"{context}: invalid archive was accepted")
 
 
+class FakeExtFs:
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        self.mkdir_calls: list[tuple[str, int, bool, bool]] = []
+        self.open_calls: list[tuple[str, str, int]] = []
+
+    @property
+    def tree(self) -> Path:
+        raise AssertionError("boot animation injection bypassed ExtFs metadata APIs")
+
+    def mkdir(
+        self,
+        path: str,
+        mode: int = 0o755,
+        parents: bool = False,
+        exist_ok: bool = False,
+    ) -> None:
+        self.mkdir_calls.append((path, mode, parents, exist_ok))
+        (self.root / path.lstrip("/")).mkdir(
+            mode=mode,
+            parents=parents,
+            exist_ok=exist_ok,
+        )
+
+    def open(self, path: str, open_mode: str, mode: int = 0o644):
+        self.open_calls.append((path, open_mode, mode))
+        target = self.root / path.lstrip("/")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        return target.open(open_mode)
+
+
+def test_runtime_payload_installation() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        source = root / "source.zip"
+        write_valid(source)
+
+        runtime = build_runtime_payload(source)
+        with zipfile.ZipFile(io.BytesIO(runtime), "r") as archive:
+            files = [info for info in archive.infolist() if not info.is_dir()]
+            assert files
+            assert all(info.compress_type == zipfile.ZIP_STORED for info in files)
+
+        product = FakeExtFs(root / "product-fs")
+        install_runtime_payload({"product": product}, runtime)
+
+        expected_targets = [
+            "/product/media/bootanimation.zip",
+            "/product/media/bootanimation-dark.zip",
+        ]
+        assert [call[0] for call in product.open_calls] == expected_targets
+        assert all(call[1:] == ("wb", 0o644) for call in product.open_calls)
+        assert all(call[0] == "/product/media" for call in product.mkdir_calls)
+        for target in expected_targets:
+            assert (product.root / target.lstrip("/")).read_bytes() == runtime
+
+        try:
+            install_runtime_payload({}, runtime)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("missing product partition was accepted")
+
+
 def main() -> None:
+    test_runtime_payload_installation()
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
         valid = root / "bootanimation.zip"
