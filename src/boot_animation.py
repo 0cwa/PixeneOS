@@ -8,13 +8,13 @@ payload can be validated before patching starts.
 
 from __future__ import annotations
 
-import hashlib
 import argparse
+import hashlib
+import io
 import os
 import re
 import stat
 import sys
-import tempfile
 import zipfile
 from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
@@ -28,6 +28,10 @@ MAX_UNCOMPRESSED_BYTES = 64 * 1024 * 1024
 MAX_COMPRESSION_RATIO = 200
 MAX_DESCRIPTION_BYTES = 4096
 PAYLOAD_ENVIRONMENT = "PIXENEOS_BOOT_ANIMATION_PATH"
+BOOT_ANIMATION_TARGETS = (
+    ("product", "/product/media/bootanimation.zip"),
+    ("product", "/product/media/bootanimation-dark.zip"),
+)
 
 
 class BootAnimationError(ValueError):
@@ -205,6 +209,44 @@ def validate_payload(path: str | os.PathLike[str]) -> str:
     return digest
 
 
+def build_runtime_payload(path: str | os.PathLike[str]) -> bytes:
+    """Return a deterministic Android-compatible, uncompressed animation ZIP."""
+
+    validate_payload(path)
+    output = io.BytesIO()
+    with zipfile.ZipFile(Path(path), "r") as source:
+        with zipfile.ZipFile(
+            output,
+            "w",
+            compression=zipfile.ZIP_STORED,
+            allowZip64=False,
+        ) as runtime:
+            for info in source.infolist():
+                if info.is_dir():
+                    continue
+                runtime.writestr(
+                    info.filename,
+                    _read_member(source, info),
+                    compress_type=zipfile.ZIP_STORED,
+                )
+    return output.getvalue()
+
+
+def install_runtime_payload(ext_fs: dict[str, Any], payload: bytes) -> None:
+    """Install through ExtFs so AFSR metadata and SELinux labels stay in sync."""
+
+    for partition, raw_target in BOOT_ANIMATION_TARGETS:
+        fs = ext_fs.get(partition)
+        if fs is None:
+            raise RuntimeError(
+                f"boot animation target partition is missing: {partition}"
+            )
+        target = PurePosixPath(raw_target)
+        fs.mkdir(str(target.parent), mode=0o755, parents=True, exist_ok=True)
+        with fs.open(str(target), "wb", mode=0o644) as stream:
+            stream.write(payload)
+
+
 def _module_class() -> type[Any]:
     # Import only when the pinned helper imports this file.  This keeps the
     # standalone validator usable before the helper is fetched.
@@ -245,7 +287,7 @@ def _module_class() -> type[Any]:
         def requirements(self) -> ModuleRequirements:
             return ModuleRequirements(
                 boot_images=set(),
-                ext_images={"system"},
+                ext_images={"product"},
                 selinux_patching=False,
             )
 
@@ -260,23 +302,8 @@ def _module_class() -> type[Any]:
             payload_path = os.environ.get(PAYLOAD_ENVIRONMENT)
             if not payload_path:
                 raise RuntimeError(f"{PAYLOAD_ENVIRONMENT} is not set")
-            validate_payload(payload_path)
-            payload = Path(payload_path)
-            target = ext_fs["system"].tree / "system" / "media" / "bootanimation.zip"
-            target.parent.mkdir(parents=True, exist_ok=True)
-            descriptor, temporary = tempfile.mkstemp(
-                prefix=".bootanimation.", dir=target.parent
-            )
-            try:
-                with os.fdopen(descriptor, "wb") as stream:
-                    stream.write(payload.read_bytes())
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                os.chmod(temporary, 0o644)
-                os.replace(temporary, target)
-            finally:
-                if os.path.exists(temporary):
-                    os.unlink(temporary)
+            payload = build_runtime_payload(payload_path)
+            install_runtime_payload(ext_fs, payload)
 
     return BootAnimationMod
 
