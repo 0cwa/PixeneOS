@@ -1,7 +1,7 @@
 {
   "version": 2,
   "full": {
-    "location_ota": "https://github.com/0cwa/ModOS/releases/download/2026091900/shiba-2026091900-magisk-v30.7-b69d9651c7868c72416ff6008e0f91ba1223c43377b835218544b9cf6d2367a4-e83e66a.zip",
-    "location_csig": "https://github.com/0cwa/ModOS/releases/download/2026091900/shiba-2026091900-magisk-v30.7-b69d9651c7868c72416ff6008e0f91ba1223c43377b835218544b9cf6d2367a4-e83e66a.zip.csig"
+    "location_ota": "https://github.com/0cwa/ModOS/releases/download/2026091900/shiba-2026091900-magisk-v30.7-b69d9651c7868c72416ff6008e0f91ba1223c43377b835218544b9cf6d2367a4-b32863e.zip",
+    "location_csig": "https://github.com/0cwa/ModOS/releases/download/2026091900/shiba-2026091900-magisk-v30.7-b69d9651c7868c72416ff6008e0f91ba1223c43377b835218544b9cf6d2367a4-b32863e.zip.csig"
   }
 }
