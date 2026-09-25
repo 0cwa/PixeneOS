@@ -29,15 +29,9 @@ MAX_COMPRESSION_RATIO = 200
 MAX_DESCRIPTION_BYTES = 4096
 PAYLOAD_ENVIRONMENT = "PIXENEOS_BOOT_ANIMATION_PATH"
 BOOT_ANIMATION_TARGETS = (
-    ("product", "/product/media/bootanimation.zip"),
-    ("product", "/product/media/bootanimation-dark.zip"),
+    ("product", "/media/bootanimation.zip"),
+    ("product", "/media/bootanimation-dark.zip"),
 )
-BOOT_ANIMATION_BINARY = "/system/bin/bootanimation"
-APEX_BOOT_ANIMATION_PATH = b"/apex/com.android.bootanimation/etc/bootanimation.zip"
-DISABLED_APEX_BOOT_ANIMATION_PATH = b"/apex/com.android.bootanimation/etc/bootanimation.off"
-
-if len(APEX_BOOT_ANIMATION_PATH) != len(DISABLED_APEX_BOOT_ANIMATION_PATH):
-    raise RuntimeError("boot animation precedence patch must preserve binary length")
 
 
 class BootAnimationError(ValueError):
@@ -254,56 +248,15 @@ def install_runtime_payload(ext_fs: dict[str, Any], payload: bytes) -> None:
 
 
 
-def disable_apex_boot_animation_precedence(ext_fs: dict[str, Any]) -> None:
-    """Make Android fall through from its APEX candidate to the product payload."""
-
-    fs = ext_fs.get("system")
-    if fs is None:
-        raise RuntimeError("boot animation system partition is missing")
-
-    try:
-        with fs.open(BOOT_ANIMATION_BINARY, "r+b") as stream:
-            binary = stream.read()
-            active_count = binary.count(APEX_BOOT_ANIMATION_PATH)
-            disabled_count = binary.count(DISABLED_APEX_BOOT_ANIMATION_PATH)
-            if active_count != 1 or disabled_count != 0:
-                raise RuntimeError(
-                    "unsupported bootanimation binary: expected exactly one "
-                    "active APEX animation path"
-                )
-            patched = binary.replace(
-                APEX_BOOT_ANIMATION_PATH,
-                DISABLED_APEX_BOOT_ANIMATION_PATH,
-                1,
-            )
-            if len(patched) != len(binary):
-                raise RuntimeError("bootanimation binary patch changed file size")
-            stream.seek(0)
-            stream.write(patched)
-            stream.truncate()
-            stream.flush()
-            os.fsync(stream.fileno())
-    except FileNotFoundError as exc:
-        raise RuntimeError(
-            f"bootanimation binary is missing: {BOOT_ANIMATION_BINARY}"
-        ) from exc
-
 
 def verify_runtime_installation(
     source_path: str | os.PathLike[str],
-    binary_path: str | os.PathLike[str],
     light_path: str | os.PathLike[str],
     dark_path: str | os.PathLike[str],
 ) -> None:
-    """Verify the effective custom-animation state extracted from a finished OTA."""
+    """Verify the custom animation extracted from a finished product image."""
 
     expected = build_runtime_payload(source_path)
-    binary = Path(binary_path).read_bytes()
-    if binary.count(APEX_BOOT_ANIMATION_PATH) != 0:
-        raise RuntimeError("finished OTA still prefers the APEX boot animation")
-    if binary.count(DISABLED_APEX_BOOT_ANIMATION_PATH) != 1:
-        raise RuntimeError("finished OTA lacks the APEX-precedence patch")
-
     for runtime_path in (Path(light_path), Path(dark_path)):
         if runtime_path.read_bytes() != expected:
             raise RuntimeError(
@@ -351,7 +304,7 @@ def _module_class() -> type[Any]:
         def requirements(self) -> ModuleRequirements:
             return ModuleRequirements(
                 boot_images=set(),
-                ext_images={"system", "product"},
+                ext_images={"product"},
                 selinux_patching=False,
             )
 
@@ -368,7 +321,6 @@ def _module_class() -> type[Any]:
                 raise RuntimeError(f"{PAYLOAD_ENVIRONMENT} is not set")
             payload = build_runtime_payload(payload_path)
             install_runtime_payload(ext_fs, payload)
-            disable_apex_boot_animation_precedence(ext_fs)
 
     return BootAnimationMod
 
@@ -388,8 +340,8 @@ def main(argv: list[str]) -> int:
         if len(argv) == 3 and argv[1] in {"validate", "digest"}:
             print(validate_payload(argv[2]))
             return 0
-        if len(argv) == 6 and argv[1] == "verify-runtime":
-            verify_runtime_installation(argv[2], argv[3], argv[4], argv[5])
+        if len(argv) == 5 and argv[1] == "verify-runtime":
+            verify_runtime_installation(argv[2], argv[3], argv[4])
             return 0
     except (BootAnimationError, OSError, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
@@ -397,7 +349,7 @@ def main(argv: list[str]) -> int:
 
     print(
         f"usage: {argv[0]} validate <bootanimation.zip> | "
-        "verify-runtime <source.zip> <bootanimation-binary> <light.zip> <dark.zip>",
+        "verify-runtime <source.zip> <light.zip> <dark.zip>",
         file=sys.stderr,
     )
     return 2
