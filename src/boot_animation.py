@@ -225,8 +225,17 @@ def build_runtime_payload(path: str | os.PathLike[str]) -> bytes:
             for info in source.infolist():
                 if info.is_dir():
                     continue
-                runtime.writestr(
+                runtime_info = zipfile.ZipInfo(
                     info.filename,
+                    date_time=(1980, 1, 1, 0, 0, 0),
+                )
+                runtime_info.compress_type = zipfile.ZIP_STORED
+                runtime_info.create_system = 3
+                runtime_info.external_attr = (stat.S_IFREG | 0o644) << 16
+                runtime_info.extra = b""
+                runtime_info.comment = b""
+                runtime.writestr(
+                    runtime_info,
                     _read_member(source, info),
                     compress_type=zipfile.ZIP_STORED,
                 )
