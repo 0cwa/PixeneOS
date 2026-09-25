@@ -244,15 +244,18 @@ function append_enabled_module_arguments() {
 # API used by src/debugmod.py at the pinned helper revision.
 function prepare_boot_animation_module() {
   local helper_root="${1}"
-  local repository_root payload_path init_file registry_file module_source
-  repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)" || return 1
-  payload_path="${repository_root}/custom/boot-animation/bootanimation.zip"
+  local payload_path dark_payload_path init_file registry_file module_source
 
   if [[ "${ADDITIONALS[BOOT_ANIMATION]}" != 'true' ]]; then
     return 0
   fi
 
-  if ! python3 src/boot_animation.py validate "${payload_path}" >/dev/null; then
+  _resolve_boot_animation_payloads || return 1
+  payload_path="${BOOT_ANIMATION_LIGHT_PAYLOAD}"
+  dark_payload_path="${BOOT_ANIMATION_DARK_PAYLOAD}"
+
+  if ! python3 src/boot_animation.py validate "${payload_path}" >/dev/null ||
+    ! python3 src/boot_animation.py validate "${dark_payload_path}" >/dev/null; then
     echo "Error: boot animation validation failed; refusing to patch." >&2
     return 1
   fi
@@ -310,6 +313,7 @@ function prepare_boot_animation_module() {
   : >"${WORKDIR}/modules/boot-animation.zip"
   : >"${WORKDIR}/signatures/boot-animation.zip.sig"
   export PIXENEOS_BOOT_ANIMATION_PATH="${payload_path}"
+  export PIXENEOS_BOOT_ANIMATION_DARK_PATH="${dark_payload_path}"
 }
 
 # Resolve and acquire the locked F-Droid inputs before exposing them to the
@@ -665,7 +669,7 @@ function extract_ota_boot_target() {
 
 function verify_boot_animation_ota() {
   local ota_path="${1}"
-  local temp_dir payload_path avbroot_bin afsr_bin ota_abs
+  local temp_dir payload_path dark_payload_path avbroot_bin afsr_bin ota_abs
   local extract_dir unpack_dir image_path raw_image
 
   [[ -f "${ota_path}" ]] || {
@@ -673,7 +677,9 @@ function verify_boot_animation_ota() {
     return 1
   }
 
-  payload_path="$(_boot_animation_payload_path)" || return 1
+  _resolve_boot_animation_payloads || return 1
+  payload_path="${BOOT_ANIMATION_LIGHT_PAYLOAD}"
+  dark_payload_path="${BOOT_ANIMATION_DARK_PAYLOAD}"
   temp_dir="$(mktemp -d "${WORKDIR}/boot-animation-verify.XXXXXX")" || return 1
   temp_dir="$(realpath -- "${temp_dir}")" || return 1
   ota_abs="$(realpath -- "${ota_path}")" || {
@@ -704,7 +710,10 @@ function verify_boot_animation_ota() {
     return 1
   }
 
-  if ! "${avbroot_bin}" ota extract     --input "${ota_abs}"     --directory "${extract_dir}"     --partition product >/dev/null; then
+  if ! "${avbroot_bin}" ota extract \
+    --input "${ota_abs}" \
+    --directory "${extract_dir}" \
+    --partition product >/dev/null; then
     rm -rf -- "${temp_dir}"
     return 1
   fi
@@ -730,7 +739,11 @@ function verify_boot_animation_ota() {
     return 1
   fi
 
-  if ! python3 src/boot_animation.py verify-runtime     "${payload_path}"     "${unpack_dir}/fs_tree/media/bootanimation.zip"     "${unpack_dir}/fs_tree/media/bootanimation-dark.zip"; then
+  if ! python3 src/boot_animation.py verify-runtime \
+    "${payload_path}" \
+    "${dark_payload_path}" \
+    "${unpack_dir}/fs_tree/media/bootanimation.zip" \
+    "${unpack_dir}/fs_tree/media/bootanimation-dark.zip"; then
     rm -rf -- "${temp_dir}"
     return 1
   fi

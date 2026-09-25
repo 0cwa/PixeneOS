@@ -28,6 +28,7 @@ MAX_UNCOMPRESSED_BYTES = 64 * 1024 * 1024
 MAX_COMPRESSION_RATIO = 200
 MAX_DESCRIPTION_BYTES = 4096
 PAYLOAD_ENVIRONMENT = "PIXENEOS_BOOT_ANIMATION_PATH"
+DARK_PAYLOAD_ENVIRONMENT = "PIXENEOS_BOOT_ANIMATION_DARK_PATH"
 BOOT_ANIMATION_TARGETS = (
     ("product", "/media/bootanimation.zip"),
     ("product", "/media/bootanimation-dark.zip"),
@@ -232,8 +233,19 @@ def build_runtime_payload(path: str | os.PathLike[str]) -> bytes:
     return output.getvalue()
 
 
-def install_runtime_payload(ext_fs: dict[str, Any], payload: bytes) -> None:
-    """Install through ExtFs so AFSR metadata and SELinux labels stay in sync."""
+def install_runtime_payload(
+    ext_fs: dict[str, Any],
+    light_payload: bytes,
+    dark_payload: bytes | None = None,
+) -> None:
+    """Install theme payloads through ExtFs with single-file fallback."""
+
+    if dark_payload is None:
+        dark_payload = light_payload
+    payload_by_target = {
+        "/media/bootanimation.zip": light_payload,
+        "/media/bootanimation-dark.zip": dark_payload,
+    }
 
     for partition, raw_target in BOOT_ANIMATION_TARGETS:
         fs = ext_fs.get(partition)
@@ -244,20 +256,41 @@ def install_runtime_payload(ext_fs: dict[str, Any], payload: bytes) -> None:
         target = PurePosixPath(raw_target)
         fs.mkdir(str(target.parent), mode=0o755, parents=True, exist_ok=True)
         with fs.open(str(target), "wb", mode=0o644) as stream:
-            stream.write(payload)
+            stream.write(payload_by_target[raw_target])
 
 
+def resolve_runtime_payloads(
+    light_path: str | os.PathLike[str] | None,
+    dark_path: str | os.PathLike[str] | None,
+) -> tuple[bytes, bytes]:
+    """Resolve one or two source archives into light/dark runtime payloads."""
+
+    if not light_path and not dark_path:
+        raise RuntimeError("no boot animation payload is configured")
+    light_source = light_path or dark_path
+    dark_source = dark_path or light_path
+    assert light_source is not None
+    assert dark_source is not None
+    return build_runtime_payload(light_source), build_runtime_payload(dark_source)
 
 
 def verify_runtime_installation(
-    source_path: str | os.PathLike[str],
+    light_source_path: str | os.PathLike[str],
+    dark_source_path: str | os.PathLike[str],
     light_path: str | os.PathLike[str],
     dark_path: str | os.PathLike[str],
 ) -> None:
-    """Verify the custom animation extracted from a finished product image."""
+    """Verify theme payloads extracted from a finished product image."""
 
-    expected = build_runtime_payload(source_path)
-    for runtime_path in (Path(light_path), Path(dark_path)):
+    expected_light, expected_dark = resolve_runtime_payloads(
+        light_source_path,
+        dark_source_path,
+    )
+    actual = (
+        (Path(light_path), expected_light),
+        (Path(dark_path), expected_dark),
+    )
+    for runtime_path, expected in actual:
         if runtime_path.read_bytes() != expected:
             raise RuntimeError(
                 f"finished OTA boot animation does not match payload: {runtime_path}"
@@ -317,10 +350,12 @@ def _module_class() -> type[Any]:
         ) -> None:
             del boot_fs, sepolicies, compatible_sepolicy
             payload_path = os.environ.get(PAYLOAD_ENVIRONMENT)
-            if not payload_path:
-                raise RuntimeError(f"{PAYLOAD_ENVIRONMENT} is not set")
-            payload = build_runtime_payload(payload_path)
-            install_runtime_payload(ext_fs, payload)
+            dark_payload_path = os.environ.get(DARK_PAYLOAD_ENVIRONMENT)
+            light_payload, dark_payload = resolve_runtime_payloads(
+                payload_path,
+                dark_payload_path,
+            )
+            install_runtime_payload(ext_fs, light_payload, dark_payload)
 
     return BootAnimationMod
 
@@ -340,8 +375,8 @@ def main(argv: list[str]) -> int:
         if len(argv) == 3 and argv[1] in {"validate", "digest"}:
             print(validate_payload(argv[2]))
             return 0
-        if len(argv) == 5 and argv[1] == "verify-runtime":
-            verify_runtime_installation(argv[2], argv[3], argv[4])
+        if len(argv) == 6 and argv[1] == "verify-runtime":
+            verify_runtime_installation(argv[2], argv[3], argv[4], argv[5])
             return 0
     except (BootAnimationError, OSError, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
@@ -349,7 +384,7 @@ def main(argv: list[str]) -> int:
 
     print(
         f"usage: {argv[0]} validate <bootanimation.zip> | "
-        "verify-runtime <source.zip> <light.zip> <dark.zip>",
+        "verify-runtime <light-source.zip> <dark-source.zip> <light.zip> <dark.zip>",
         file=sys.stderr,
     )
     return 2

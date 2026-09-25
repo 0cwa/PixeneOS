@@ -218,7 +218,10 @@ with zipfile.ZipFile(sys.argv[1], "w") as archive:
     archive.writestr("desc.txt", "1 1 1\np 1 0 part0\n")
     archive.writestr("part0/frame.png", b"frame")
 PY
-  _boot_animation_payload_path() { printf '%s\n' "${TEST_ROOT}/custom/boot-animation/bootanimation.zip"; }
+  _resolve_boot_animation_payloads() {
+    BOOT_ANIMATION_LIGHT_PAYLOAD="${TEST_ROOT}/custom/boot-animation/bootanimation.zip"
+    BOOT_ANIMATION_DARK_PAYLOAD="${BOOT_ANIMATION_LIGHT_PAYLOAD}"
+  }
   boot_changed="$(fingerprint)"
   [[ "${boot_changed}" != "${module_changed}" ]] ||
     fail "boot animation selection did not change the fingerprint"
@@ -234,6 +237,23 @@ PY
   second_boot_changed="$(fingerprint)"
   [[ "${second_boot_changed}" != "${boot_changed}" ]] ||
     fail "enabled boot-animation payload change did not change the fingerprint"
+
+  python3 - "${TEST_ROOT}/custom/boot-animation/bootanimation-dark.zip" <<'PY'
+import sys
+import zipfile
+
+with zipfile.ZipFile(sys.argv[1], "w") as archive:
+    archive.writestr("desc.txt", "1 1 1\np 1 0 part0\n")
+    archive.writestr("part0/frame.png", b"dark-frame")
+PY
+  _resolve_boot_animation_payloads() {
+    BOOT_ANIMATION_LIGHT_PAYLOAD="${TEST_ROOT}/custom/boot-animation/bootanimation.zip"
+    BOOT_ANIMATION_DARK_PAYLOAD="${TEST_ROOT}/custom/boot-animation/bootanimation-dark.zip"
+  }
+  local dark_boot_changed
+  dark_boot_changed="$(fingerprint)"
+  [[ "${dark_boot_changed}" != "${second_boot_changed}" ]] ||
+    fail "dark boot-animation payload did not change the fingerprint"
 )
 
 test_output_filename_contains_fingerprint() (
