@@ -613,6 +613,7 @@ function patch_ota() {
     # output separation, but /data/adb/magisk is provisioned on-device by
     # Magisk's additional-setup/environment-fix flow.
     verify_requested_root_outputs || return 1
+    verify_requested_boot_animation_outputs || return 1
 
     if [[ "${RESOLVED_ROOT_MODE}" == 'both' ]]; then
       generate_custota_variant_sidecars         "${OUTPUTS[PATCHED_OTA_ROOTLESS]}"         "${OUTPUTS[OTA_METADATA_ROOTLESS]}" || return 1
@@ -661,6 +662,116 @@ function extract_ota_boot_target() {
 
   printf '%s\n' "${target}"
 }
+
+function verify_boot_animation_ota() {
+  local ota_path="${1}"
+  local temp_dir payload_path avbroot_bin afsr_bin ota_abs
+  local partition extract_dir unpack_dir image_path raw_image
+
+  [[ -f "${ota_path}" ]] || {
+    echo "Error: missing OTA for boot-animation inspection: ${ota_path}" >&2
+    return 1
+  }
+
+  payload_path="$(_boot_animation_payload_path)" || return 1
+  temp_dir="$(mktemp -d "${WORKDIR}/boot-animation-verify.XXXXXX")" || return 1
+  temp_dir="$(realpath -- "${temp_dir}")" || return 1
+  ota_abs="$(realpath -- "${ota_path}")" || {
+    rm -rf -- "${temp_dir}"
+    return 1
+  }
+  avbroot_bin="$(resolve_executable_tool avbroot)" || {
+    rm -rf -- "${temp_dir}"
+    return 1
+  }
+  afsr_bin="$(resolve_executable_tool afsr)" || {
+    rm -rf -- "${temp_dir}"
+    return 1
+  }
+  avbroot_bin="$(realpath -- "${avbroot_bin}")" || {
+    rm -rf -- "${temp_dir}"
+    return 1
+  }
+  afsr_bin="$(realpath -- "${afsr_bin}")" || {
+    rm -rf -- "${temp_dir}"
+    return 1
+  }
+
+  for partition in system product; do
+    extract_dir="${temp_dir}/extract-${partition}"
+    unpack_dir="${temp_dir}/unpack-${partition}"
+    mkdir -p -- "${extract_dir}" "${unpack_dir}" || {
+      rm -rf -- "${temp_dir}"
+      return 1
+    }
+
+    if ! "${avbroot_bin}" ota extract       --input "${ota_abs}"       --directory "${extract_dir}"       --partition "${partition}" >/dev/null; then
+      rm -rf -- "${temp_dir}"
+      return 1
+    fi
+
+    image_path="${extract_dir}/${partition}.img"
+    [[ -s "${image_path}" ]] || {
+      echo "Error: boot-animation verification did not extract ${partition}.img." >&2
+      rm -rf -- "${temp_dir}"
+      return 1
+    }
+    image_path="$(realpath -- "${image_path}")" || {
+      rm -rf -- "${temp_dir}"
+      return 1
+    }
+
+    if ! (
+      cd -- "${unpack_dir}" &&
+        "${avbroot_bin}" avb unpack --quiet --input "${image_path}" &&
+        raw_image="$(realpath -- raw.img)" &&
+        "${afsr_bin}" unpack --input "${raw_image}"
+    ); then
+      rm -rf -- "${temp_dir}"
+      return 1
+    fi
+  done
+
+  if ! python3 src/boot_animation.py verify-runtime     "${payload_path}"     "${temp_dir}/unpack-system/fs_tree/system/bin/bootanimation"     "${temp_dir}/unpack-product/fs_tree/product/media/bootanimation.zip"     "${temp_dir}/unpack-product/fs_tree/product/media/bootanimation-dark.zip"; then
+    rm -rf -- "${temp_dir}"
+    return 1
+  fi
+
+  rm -rf -- "${temp_dir}"
+  echo "Verified effective custom boot animation in finished OTA: ${ota_path}"
+}
+
+function verify_requested_boot_animation_outputs() {
+  local -a ota_paths=()
+  local ota_path
+
+  [[ "${ADDITIONALS[BOOT_ANIMATION]}" == 'true' ]] || return 0
+
+  case "${RESOLVED_ROOT_MODE}" in
+    rootless|magisk)
+      ota_paths=("${OUTPUTS[PATCHED_OTA]}")
+      ;;
+    both)
+      ota_paths=(
+        "${OUTPUTS[PATCHED_OTA_ROOTLESS]}"
+        "${OUTPUTS[PATCHED_OTA_MAGISK]}"
+      )
+      ;;
+    *)
+      echo "Error: cannot verify boot animation for root mode: ${RESOLVED_ROOT_MODE}" >&2
+      return 1
+      ;;
+  esac
+
+  for ota_path in "${ota_paths[@]}"; do
+    if ! verify_boot_animation_ota "${ota_path}"; then
+      rm -f -- "${ota_path}" "${ota_path}.csig"
+      echo "Error: refusing to keep or publish an OTA without verified custom boot animation." >&2
+      return 1
+    fi
+  done
+}
+
 
 function verify_magisk_ota() {
   local ota_path="${1}"
