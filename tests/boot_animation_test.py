@@ -18,6 +18,7 @@ from boot_animation import (  # noqa: E402
     BootAnimationError,
     build_runtime_payload,
     install_runtime_payload,
+    resolve_runtime_payloads,
     validate_payload,
     verify_runtime_installation,
 )
@@ -97,11 +98,49 @@ def test_runtime_payload_installation() -> None:
         # therefore contains /media, not another nested /product directory.
         assert not (product.root / "product").exists()
 
+        light_runtime, dark_runtime = resolve_runtime_payloads(source, None)
+        assert light_runtime == dark_runtime == runtime
         verify_runtime_installation(
+            source,
             source,
             product.root / "media/bootanimation.zip",
             product.root / "media/bootanimation-dark.zip",
         )
+
+        dark_source = root / "dark-source.zip"
+        write_valid(dark_source, frame=b"dark-frame")
+        dark_runtime = build_runtime_payload(dark_source)
+        themed_product = FakeExtFs(root / "themed-product-fs")
+        resolved_light, resolved_dark = resolve_runtime_payloads(source, dark_source)
+        assert resolved_light == runtime
+        assert resolved_dark == dark_runtime
+        install_runtime_payload(
+            {"product": themed_product},
+            resolved_light,
+            resolved_dark,
+        )
+        assert (
+            themed_product.root / "media/bootanimation.zip"
+        ).read_bytes() == runtime
+        assert (
+            themed_product.root / "media/bootanimation-dark.zip"
+        ).read_bytes() == dark_runtime
+        verify_runtime_installation(
+            source,
+            dark_source,
+            themed_product.root / "media/bootanimation.zip",
+            themed_product.root / "media/bootanimation-dark.zip",
+        )
+
+        dark_only_light, dark_only_dark = resolve_runtime_payloads(None, dark_source)
+        assert dark_only_light == dark_only_dark == dark_runtime
+
+        try:
+            resolve_runtime_payloads(None, None)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("missing light and dark payloads were accepted")
 
         try:
             install_runtime_payload({}, runtime)
