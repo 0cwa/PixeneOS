@@ -14,12 +14,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from boot_animation import (  # noqa: E402
-    APEX_BOOT_ANIMATION_PATH,
-    DISABLED_APEX_BOOT_ANIMATION_PATH,
     MAX_MEMBER_COUNT,
     BootAnimationError,
     build_runtime_payload,
-    disable_apex_boot_animation_precedence,
     install_runtime_payload,
     validate_payload,
     verify_runtime_installation,
@@ -87,56 +84,24 @@ def test_runtime_payload_installation() -> None:
         install_runtime_payload({"product": product}, runtime)
 
         expected_targets = [
-            "/product/media/bootanimation.zip",
-            "/product/media/bootanimation-dark.zip",
+            "/media/bootanimation.zip",
+            "/media/bootanimation-dark.zip",
         ]
         assert [call[0] for call in product.open_calls] == expected_targets
         assert all(call[1:] == ("wb", 0o644) for call in product.open_calls)
-        assert all(call[0] == "/product/media" for call in product.mkdir_calls)
+        assert all(call[0] == "/media" for call in product.mkdir_calls)
         for target in expected_targets:
             assert (product.root / target.lstrip("/")).read_bytes() == runtime
 
-        system = FakeExtFs(root / "system-fs")
-        bootanimation = system.root / "system/bin/bootanimation"
-        bootanimation.parent.mkdir(parents=True, exist_ok=True)
-        bootanimation.write_bytes(
-            b"ELF-prefix" + APEX_BOOT_ANIMATION_PATH + b"ELF-suffix"
-        )
-        original_size = bootanimation.stat().st_size
-        disable_apex_boot_animation_precedence({"system": system})
-        patched_binary = bootanimation.read_bytes()
-        assert bootanimation.stat().st_size == original_size
-        assert APEX_BOOT_ANIMATION_PATH not in patched_binary
-        assert patched_binary.count(DISABLED_APEX_BOOT_ANIMATION_PATH) == 1
+        # A standalone product.img is mounted at /product. Its filesystem root
+        # therefore contains /media, not another nested /product directory.
+        assert not (product.root / "product").exists()
 
         verify_runtime_installation(
             source,
-            bootanimation,
-            product.root / "product/media/bootanimation.zip",
-            product.root / "product/media/bootanimation-dark.zip",
+            product.root / "media/bootanimation.zip",
+            product.root / "media/bootanimation-dark.zip",
         )
-
-        unsupported = FakeExtFs(root / "unsupported-system")
-        unsupported_binary = unsupported.root / "system/bin/bootanimation"
-        unsupported_binary.parent.mkdir(parents=True, exist_ok=True)
-        unsupported_binary.write_bytes(b"ELF-without-apex-path")
-        try:
-            disable_apex_boot_animation_precedence({"system": unsupported})
-        except RuntimeError:
-            pass
-        else:
-            raise AssertionError("unsupported bootanimation binary was accepted")
-
-        duplicate = FakeExtFs(root / "duplicate-system")
-        duplicate_binary = duplicate.root / "system/bin/bootanimation"
-        duplicate_binary.parent.mkdir(parents=True, exist_ok=True)
-        duplicate_binary.write_bytes(APEX_BOOT_ANIMATION_PATH * 2)
-        try:
-            disable_apex_boot_animation_precedence({"system": duplicate})
-        except RuntimeError:
-            pass
-        else:
-            raise AssertionError("ambiguous bootanimation binary was accepted")
 
         try:
             install_runtime_payload({}, runtime)
