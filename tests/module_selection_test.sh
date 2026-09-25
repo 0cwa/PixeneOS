@@ -56,6 +56,10 @@ verify_requested_root_outputs() {
   :
 }
 
+verify_requested_boot_animation_outputs() {
+  :
+}
+
 fail() {
   echo "$*" >&2
   exit 1
