@@ -1,0 +1,33 @@
+name: One-shot force publish shiba
+
+on:
+  push:
+    branches:
+      - ops/force-publish-shiba-20260921
+    paths:
+      - .github/workflows/force-publish-shiba-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  force-publish:
+    uses: ./.github/workflows/release.yml
+    with:
+      device-id: shiba
+      root: true
+      root-mode: magisk
+      afsr: true
+      alterinstaller: true
+      bcr: true
+      custota: true
+      msd: true
+      oemunlockonboot: true
+      fdroid-privileged-extension: false
+      magisk-preinit-device: sda10
+      update-channel: stable
+      compatible-sepolicy-patching: false
+      allow-unauthorized-adb: false
+      boot-animation: true
+      release-type: force-publish
+    secrets: inherit
