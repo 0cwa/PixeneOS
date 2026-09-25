@@ -7,6 +7,8 @@
 # this helper owns the byte-for-byte representation that is hashed by both the
 # build and release preflight paths.
 
+BOOT_ANIMATION_SELECTION_CONTRACT="product-image-root-stored-v4"
+
 function selection_variant_manifest() {
   local field value
   local -a required_fields=(
@@ -116,6 +118,7 @@ function selection_variant_manifest() {
   if [[ "${SELECTION_BOOT_ANIMATION}" == 'true' ]]; then
     printf '%s\n' \
       'boot_animation=true' \
+      "boot_animation_contract=${BOOT_ANIMATION_SELECTION_CONTRACT}" \
       "boot_animation_sha256=${SELECTION_BOOT_ANIMATION_SHA256}"
   fi
 }

@@ -19,6 +19,7 @@ from boot_animation import (  # noqa: E402
     build_runtime_payload,
     install_runtime_payload,
     validate_payload,
+    verify_runtime_installation,
 )
 
 
@@ -83,14 +84,24 @@ def test_runtime_payload_installation() -> None:
         install_runtime_payload({"product": product}, runtime)
 
         expected_targets = [
-            "/product/media/bootanimation.zip",
-            "/product/media/bootanimation-dark.zip",
+            "/media/bootanimation.zip",
+            "/media/bootanimation-dark.zip",
         ]
         assert [call[0] for call in product.open_calls] == expected_targets
         assert all(call[1:] == ("wb", 0o644) for call in product.open_calls)
-        assert all(call[0] == "/product/media" for call in product.mkdir_calls)
+        assert all(call[0] == "/media" for call in product.mkdir_calls)
         for target in expected_targets:
             assert (product.root / target.lstrip("/")).read_bytes() == runtime
+
+        # A standalone product.img is mounted at /product. Its filesystem root
+        # therefore contains /media, not another nested /product directory.
+        assert not (product.root / "product").exists()
+
+        verify_runtime_installation(
+            source,
+            product.root / "media/bootanimation.zip",
+            product.root / "media/bootanimation-dark.zip",
+        )
 
         try:
             install_runtime_payload({}, runtime)

@@ -29,8 +29,8 @@ MAX_COMPRESSION_RATIO = 200
 MAX_DESCRIPTION_BYTES = 4096
 PAYLOAD_ENVIRONMENT = "PIXENEOS_BOOT_ANIMATION_PATH"
 BOOT_ANIMATION_TARGETS = (
-    ("product", "/product/media/bootanimation.zip"),
-    ("product", "/product/media/bootanimation-dark.zip"),
+    ("product", "/media/bootanimation.zip"),
+    ("product", "/media/bootanimation-dark.zip"),
 )
 
 
@@ -247,6 +247,23 @@ def install_runtime_payload(ext_fs: dict[str, Any], payload: bytes) -> None:
             stream.write(payload)
 
 
+
+
+def verify_runtime_installation(
+    source_path: str | os.PathLike[str],
+    light_path: str | os.PathLike[str],
+    dark_path: str | os.PathLike[str],
+) -> None:
+    """Verify the custom animation extracted from a finished product image."""
+
+    expected = build_runtime_payload(source_path)
+    for runtime_path in (Path(light_path), Path(dark_path)):
+        if runtime_path.read_bytes() != expected:
+            raise RuntimeError(
+                f"finished OTA boot animation does not match payload: {runtime_path}"
+            )
+
+
 def _module_class() -> type[Any]:
     # Import only when the pinned helper imports this file.  This keeps the
     # standalone validator usable before the helper is fetched.
@@ -319,15 +336,23 @@ if __name__ != "__main__":
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 3 or argv[1] not in {"validate", "digest"}:
-        print(f"usage: {argv[0]} validate <bootanimation.zip>", file=sys.stderr)
-        return 2
     try:
-        print(validate_payload(argv[2]))
-    except BootAnimationError as exc:
+        if len(argv) == 3 and argv[1] in {"validate", "digest"}:
+            print(validate_payload(argv[2]))
+            return 0
+        if len(argv) == 5 and argv[1] == "verify-runtime":
+            verify_runtime_installation(argv[2], argv[3], argv[4])
+            return 0
+    except (BootAnimationError, OSError, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
-    return 0
+
+    print(
+        f"usage: {argv[0]} validate <bootanimation.zip> | "
+        "verify-runtime <source.zip> <light.zip> <dark.zip>",
+        file=sys.stderr,
+    )
+    return 2
 
 
 if __name__ == "__main__":
