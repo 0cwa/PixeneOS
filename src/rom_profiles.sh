@@ -134,342 +134,38 @@ function _locked_input_digest() {
   printf '%s\n' "${digest}"
 }
 
-function _boot_animation_payload_paths() {
-  local repository_root light_path dark_path
+function _resolve_boot_animation_payloads() {
+  local repository_root
   repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)" || return 1
-  light_path="${repository_root}/custom/boot-animation/bootanimation.zip"
-  dark_path="${repository_root}/custom/boot-animation/bootanimation-dark.zip"
 
-  if [[ ! -e "${light_path}" && ! -L "${light_path}" ]]; then
-    light_path=''
+  BOOT_ANIMATION_LIGHT_PAYLOAD="${repository_root}/custom/boot-animation/bootanimation.zip"
+  BOOT_ANIMATION_DARK_PAYLOAD="${repository_root}/custom/boot-animation/bootanimation-dark.zip"
+
+  if [[ ! -e "${BOOT_ANIMATION_LIGHT_PAYLOAD}" && ! -L "${BOOT_ANIMATION_LIGHT_PAYLOAD}" ]]; then
+    BOOT_ANIMATION_LIGHT_PAYLOAD=''
   fi
-  if [[ ! -e "${dark_path}" && ! -L "${dark_path}" ]]; then
-    dark_path=''
+  if [[ ! -e "${BOOT_ANIMATION_DARK_PAYLOAD}" && ! -L "${BOOT_ANIMATION_DARK_PAYLOAD}" ]]; then
+    BOOT_ANIMATION_DARK_PAYLOAD=''
   fi
-  if [[ -z "${light_path}" && -z "${dark_path}" ]]; then
+  if [[ -z "${BOOT_ANIMATION_LIGHT_PAYLOAD}" && -z "${BOOT_ANIMATION_DARK_PAYLOAD}" ]]; then
     echo "Error: enabled boot animation requires bootanimation.zip or bootanimation-dark.zip." >&2
     return 1
   fi
 
-  light_path="${light_path:-${dark_path}}"
-  dark_path="${dark_path:-${light_path}}"
-  printf '%s\n%s\n' "${light_path}" "${dark_path}"
+  BOOT_ANIMATION_LIGHT_PAYLOAD="${BOOT_ANIMATION_LIGHT_PAYLOAD:-${BOOT_ANIMATION_DARK_PAYLOAD}}"
+  BOOT_ANIMATION_DARK_PAYLOAD="${BOOT_ANIMATION_DARK_PAYLOAD:-${BOOT_ANIMATION_LIGHT_PAYLOAD}}"
 }
 
 function _boot_animation_payload_path() {
-  local paths
-  paths="$(_boot_animation_payload_paths)" || return 1
-  printf '%s\n' "${paths%%
-function module_selection_fingerprint() {
-  local lock_digest="disabled"
-  local profile_digest="disabled"
-  local magisk_preinit="disabled"
-  local magisk_repository="disabled"
-  local magisk_version="disabled"
-  local boot_animation_digest="disabled"
-  local entry
-  local -a module_entries=(
-    "afsr:AFSR"
-    "alterinstaller:ALTERINSTALLER"
-    "bcr:BCR"
-    "custota:CUSTOTA"
-    "fdroid-privileged-extension:FDROID_PRIVILEGED_EXTENSION"
-    "msd:MSD"
-    "oemunlockonboot:OEMUNLOCKONBOOT"
-  )
-
-  resolve_rom_profile || return 1
-  enforce_output_policy "${OUTPUT_SCOPE}" || return 1
-
-  _require_profile_boolean ADDITIONALS_ROOT "${ADDITIONALS[ROOT]}" || return 1
-  _require_profile_boolean ADDITIONALS_DEBUG "${ADDITIONALS[DEBUG]}" || return 1
-  _require_profile_boolean ADDITIONALS_BOOT_ANIMATION \
-    "${ADDITIONALS[BOOT_ANIMATION]}" || return 1
-  for entry in "${module_entries[@]}"; do
-    _require_profile_boolean \
-      "ADDITIONALS_${entry#*:}" \
-      "${ADDITIONALS[${entry#*:}]}" || return 1
-  done
-
-  if [[ "${ADDITIONALS[BOOT_ANIMATION]}" == 'true' ]]; then
-    boot_animation_digest="$(_boot_animation_payload_digest)" || {
-      echo "Error: enabled boot animation payload failed validation." >&2
-      return 1
-    }
-  fi
-
-  if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
-    magisk_preinit="${MAGISK[PREINIT]}"
-    magisk_repository="${MAGISK[REPOSITORY]}"
-    magisk_version="${VERSION[MAGISK]}"
-    if [[ ! "${magisk_preinit}" =~ ^[A-Za-z0-9._-]+$ ]]; then
-      echo "Error: rooted profiles require a canonical Magisk preinit device." >&2
-      return 1
-    fi
-    if [[ ! "${magisk_repository}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
-      echo "Error: rooted profiles require a canonical Magisk repository." >&2
-      return 1
-    fi
-    if [[ ! "${magisk_version}" =~ ^v[0-9]+([.][0-9A-Za-z_-]+)*$ ]]; then
-      echo "Error: rooted profiles require a canonical Magisk version tag." >&2
-      return 1
-    fi
-  fi
-
-  if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' ]]; then
-    lock_digest="$(_locked_input_digest "${FDROID_PRIVILEGED_EXTENSION_LOCK}")" || {
-      echo "Error: the F-Droid lock is not clean and checked in." >&2
-      return 1
-    }
-    profile_digest="$(_locked_input_digest "${FDROID_PRIVILEGED_EXTENSION_PROFILE}")" || {
-      echo "Error: the F-Droid profile is not clean and checked in." >&2
-      return 1
-    }
-  fi
-
-  SELECTION_ROM_FAMILY="${ROM_FAMILY}"
-  SELECTION_UPDATE_CHANNEL="${GRAPHENEOS[UPDATE_CHANNEL]}"
-  SELECTION_UPDATE_TYPE="${GRAPHENEOS[UPDATE_TYPE]}"
-  SELECTION_OUTPUT_SCOPE="${OUTPUT_SCOPE}"
-  SELECTION_ROOT="${ADDITIONALS[ROOT]}"
-  SELECTION_MAGISK_PREINIT="${magisk_preinit}"
-  SELECTION_MAGISK_REPOSITORY="${magisk_repository}"
-  SELECTION_MAGISK_VERSION="${magisk_version}"
-  SELECTION_DEBUG="${ADDITIONALS[DEBUG]}"
-  SELECTION_COMPATIBLE_SEPOLICY="${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}"
-  SELECTION_CLEAR_VBMETA_FLAGS="${ROM_PROFILE[CLEAR_VBMETA_FLAGS]}"
-  SELECTION_HELPER_COMMIT="${VERSION[AVBROOT_SETUP]}"
-  SELECTION_LOCK_SHA256="${lock_digest}"
-  SELECTION_PROFILE_SHA256="${profile_digest}"
-  SELECTION_MODULE_AFSR="${ADDITIONALS[AFSR]}"
-  SELECTION_MODULE_ALTERINSTALLER="${ADDITIONALS[ALTERINSTALLER]}"
-  SELECTION_MODULE_BCR="${ADDITIONALS[BCR]}"
-  SELECTION_MODULE_CUSTOTA="${ADDITIONALS[CUSTOTA]}"
-  SELECTION_MODULE_FDROID_PRIVILEGED_EXTENSION="${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}"
-  SELECTION_MODULE_MSD="${ADDITIONALS[MSD]}"
-  SELECTION_MODULE_OEMUNLOCKONBOOT="${ADDITIONALS[OEMUNLOCKONBOOT]}"
-  SELECTION_BOOT_ANIMATION="${ADDITIONALS[BOOT_ANIMATION]}"
-  SELECTION_BOOT_ANIMATION_SHA256="${boot_animation_digest}"
-
-  MODULE_SELECTION_FINGERPRINT="$(selection_variant_fingerprint)"
-
-  if [[ ! "${MODULE_SELECTION_FINGERPRINT}" =~ ^[0-9a-f]{64}$ ]]; then
-    echo "Error: failed to compute the module-selection fingerprint." >&2
-    return 1
-  fi
-  printf '%s\n' "${MODULE_SELECTION_FINGERPRINT}"
-}
-\n'*}"
+  _resolve_boot_animation_payloads || return 1
+  printf '%s\n' "${BOOT_ANIMATION_LIGHT_PAYLOAD}"
 }
 
 function _boot_animation_payload_digest() {
-  local paths light_path dark_path light_digest dark_digest
-  paths="$(_boot_animation_payload_paths)" || return 1
-  light_path="${paths%%
-function module_selection_fingerprint() {
-  local lock_digest="disabled"
-  local profile_digest="disabled"
-  local magisk_preinit="disabled"
-  local magisk_repository="disabled"
-  local magisk_version="disabled"
-  local boot_animation_digest="disabled"
-  local entry
-  local -a module_entries=(
-    "afsr:AFSR"
-    "alterinstaller:ALTERINSTALLER"
-    "bcr:BCR"
-    "custota:CUSTOTA"
-    "fdroid-privileged-extension:FDROID_PRIVILEGED_EXTENSION"
-    "msd:MSD"
-    "oemunlockonboot:OEMUNLOCKONBOOT"
-  )
-
-  resolve_rom_profile || return 1
-  enforce_output_policy "${OUTPUT_SCOPE}" || return 1
-
-  _require_profile_boolean ADDITIONALS_ROOT "${ADDITIONALS[ROOT]}" || return 1
-  _require_profile_boolean ADDITIONALS_DEBUG "${ADDITIONALS[DEBUG]}" || return 1
-  _require_profile_boolean ADDITIONALS_BOOT_ANIMATION \
-    "${ADDITIONALS[BOOT_ANIMATION]}" || return 1
-  for entry in "${module_entries[@]}"; do
-    _require_profile_boolean \
-      "ADDITIONALS_${entry#*:}" \
-      "${ADDITIONALS[${entry#*:}]}" || return 1
-  done
-
-  if [[ "${ADDITIONALS[BOOT_ANIMATION]}" == 'true' ]]; then
-    boot_animation_digest="$(_boot_animation_payload_digest)" || {
-      echo "Error: enabled boot animation payload failed validation." >&2
-      return 1
-    }
-  fi
-
-  if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
-    magisk_preinit="${MAGISK[PREINIT]}"
-    magisk_repository="${MAGISK[REPOSITORY]}"
-    magisk_version="${VERSION[MAGISK]}"
-    if [[ ! "${magisk_preinit}" =~ ^[A-Za-z0-9._-]+$ ]]; then
-      echo "Error: rooted profiles require a canonical Magisk preinit device." >&2
-      return 1
-    fi
-    if [[ ! "${magisk_repository}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
-      echo "Error: rooted profiles require a canonical Magisk repository." >&2
-      return 1
-    fi
-    if [[ ! "${magisk_version}" =~ ^v[0-9]+([.][0-9A-Za-z_-]+)*$ ]]; then
-      echo "Error: rooted profiles require a canonical Magisk version tag." >&2
-      return 1
-    fi
-  fi
-
-  if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' ]]; then
-    lock_digest="$(_locked_input_digest "${FDROID_PRIVILEGED_EXTENSION_LOCK}")" || {
-      echo "Error: the F-Droid lock is not clean and checked in." >&2
-      return 1
-    }
-    profile_digest="$(_locked_input_digest "${FDROID_PRIVILEGED_EXTENSION_PROFILE}")" || {
-      echo "Error: the F-Droid profile is not clean and checked in." >&2
-      return 1
-    }
-  fi
-
-  SELECTION_ROM_FAMILY="${ROM_FAMILY}"
-  SELECTION_UPDATE_CHANNEL="${GRAPHENEOS[UPDATE_CHANNEL]}"
-  SELECTION_UPDATE_TYPE="${GRAPHENEOS[UPDATE_TYPE]}"
-  SELECTION_OUTPUT_SCOPE="${OUTPUT_SCOPE}"
-  SELECTION_ROOT="${ADDITIONALS[ROOT]}"
-  SELECTION_MAGISK_PREINIT="${magisk_preinit}"
-  SELECTION_MAGISK_REPOSITORY="${magisk_repository}"
-  SELECTION_MAGISK_VERSION="${magisk_version}"
-  SELECTION_DEBUG="${ADDITIONALS[DEBUG]}"
-  SELECTION_COMPATIBLE_SEPOLICY="${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}"
-  SELECTION_CLEAR_VBMETA_FLAGS="${ROM_PROFILE[CLEAR_VBMETA_FLAGS]}"
-  SELECTION_HELPER_COMMIT="${VERSION[AVBROOT_SETUP]}"
-  SELECTION_LOCK_SHA256="${lock_digest}"
-  SELECTION_PROFILE_SHA256="${profile_digest}"
-  SELECTION_MODULE_AFSR="${ADDITIONALS[AFSR]}"
-  SELECTION_MODULE_ALTERINSTALLER="${ADDITIONALS[ALTERINSTALLER]}"
-  SELECTION_MODULE_BCR="${ADDITIONALS[BCR]}"
-  SELECTION_MODULE_CUSTOTA="${ADDITIONALS[CUSTOTA]}"
-  SELECTION_MODULE_FDROID_PRIVILEGED_EXTENSION="${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}"
-  SELECTION_MODULE_MSD="${ADDITIONALS[MSD]}"
-  SELECTION_MODULE_OEMUNLOCKONBOOT="${ADDITIONALS[OEMUNLOCKONBOOT]}"
-  SELECTION_BOOT_ANIMATION="${ADDITIONALS[BOOT_ANIMATION]}"
-  SELECTION_BOOT_ANIMATION_SHA256="${boot_animation_digest}"
-
-  MODULE_SELECTION_FINGERPRINT="$(selection_variant_fingerprint)"
-
-  if [[ ! "${MODULE_SELECTION_FINGERPRINT}" =~ ^[0-9a-f]{64}$ ]]; then
-    echo "Error: failed to compute the module-selection fingerprint." >&2
-    return 1
-  fi
-  printf '%s\n' "${MODULE_SELECTION_FINGERPRINT}"
-}
-\n'*}"
-  dark_path="${paths#*
-function module_selection_fingerprint() {
-  local lock_digest="disabled"
-  local profile_digest="disabled"
-  local magisk_preinit="disabled"
-  local magisk_repository="disabled"
-  local magisk_version="disabled"
-  local boot_animation_digest="disabled"
-  local entry
-  local -a module_entries=(
-    "afsr:AFSR"
-    "alterinstaller:ALTERINSTALLER"
-    "bcr:BCR"
-    "custota:CUSTOTA"
-    "fdroid-privileged-extension:FDROID_PRIVILEGED_EXTENSION"
-    "msd:MSD"
-    "oemunlockonboot:OEMUNLOCKONBOOT"
-  )
-
-  resolve_rom_profile || return 1
-  enforce_output_policy "${OUTPUT_SCOPE}" || return 1
-
-  _require_profile_boolean ADDITIONALS_ROOT "${ADDITIONALS[ROOT]}" || return 1
-  _require_profile_boolean ADDITIONALS_DEBUG "${ADDITIONALS[DEBUG]}" || return 1
-  _require_profile_boolean ADDITIONALS_BOOT_ANIMATION \
-    "${ADDITIONALS[BOOT_ANIMATION]}" || return 1
-  for entry in "${module_entries[@]}"; do
-    _require_profile_boolean \
-      "ADDITIONALS_${entry#*:}" \
-      "${ADDITIONALS[${entry#*:}]}" || return 1
-  done
-
-  if [[ "${ADDITIONALS[BOOT_ANIMATION]}" == 'true' ]]; then
-    boot_animation_digest="$(_boot_animation_payload_digest)" || {
-      echo "Error: enabled boot animation payload failed validation." >&2
-      return 1
-    }
-  fi
-
-  if [[ "${ADDITIONALS[ROOT]}" == 'true' ]]; then
-    magisk_preinit="${MAGISK[PREINIT]}"
-    magisk_repository="${MAGISK[REPOSITORY]}"
-    magisk_version="${VERSION[MAGISK]}"
-    if [[ ! "${magisk_preinit}" =~ ^[A-Za-z0-9._-]+$ ]]; then
-      echo "Error: rooted profiles require a canonical Magisk preinit device." >&2
-      return 1
-    fi
-    if [[ ! "${magisk_repository}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
-      echo "Error: rooted profiles require a canonical Magisk repository." >&2
-      return 1
-    fi
-    if [[ ! "${magisk_version}" =~ ^v[0-9]+([.][0-9A-Za-z_-]+)*$ ]]; then
-      echo "Error: rooted profiles require a canonical Magisk version tag." >&2
-      return 1
-    fi
-  fi
-
-  if [[ "${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}" == 'true' ]]; then
-    lock_digest="$(_locked_input_digest "${FDROID_PRIVILEGED_EXTENSION_LOCK}")" || {
-      echo "Error: the F-Droid lock is not clean and checked in." >&2
-      return 1
-    }
-    profile_digest="$(_locked_input_digest "${FDROID_PRIVILEGED_EXTENSION_PROFILE}")" || {
-      echo "Error: the F-Droid profile is not clean and checked in." >&2
-      return 1
-    }
-  fi
-
-  SELECTION_ROM_FAMILY="${ROM_FAMILY}"
-  SELECTION_UPDATE_CHANNEL="${GRAPHENEOS[UPDATE_CHANNEL]}"
-  SELECTION_UPDATE_TYPE="${GRAPHENEOS[UPDATE_TYPE]}"
-  SELECTION_OUTPUT_SCOPE="${OUTPUT_SCOPE}"
-  SELECTION_ROOT="${ADDITIONALS[ROOT]}"
-  SELECTION_MAGISK_PREINIT="${magisk_preinit}"
-  SELECTION_MAGISK_REPOSITORY="${magisk_repository}"
-  SELECTION_MAGISK_VERSION="${magisk_version}"
-  SELECTION_DEBUG="${ADDITIONALS[DEBUG]}"
-  SELECTION_COMPATIBLE_SEPOLICY="${ADDITIONALS[MAS_COMPATIBLE_SEPOLICY]}"
-  SELECTION_CLEAR_VBMETA_FLAGS="${ROM_PROFILE[CLEAR_VBMETA_FLAGS]}"
-  SELECTION_HELPER_COMMIT="${VERSION[AVBROOT_SETUP]}"
-  SELECTION_LOCK_SHA256="${lock_digest}"
-  SELECTION_PROFILE_SHA256="${profile_digest}"
-  SELECTION_MODULE_AFSR="${ADDITIONALS[AFSR]}"
-  SELECTION_MODULE_ALTERINSTALLER="${ADDITIONALS[ALTERINSTALLER]}"
-  SELECTION_MODULE_BCR="${ADDITIONALS[BCR]}"
-  SELECTION_MODULE_CUSTOTA="${ADDITIONALS[CUSTOTA]}"
-  SELECTION_MODULE_FDROID_PRIVILEGED_EXTENSION="${ADDITIONALS[FDROID_PRIVILEGED_EXTENSION]}"
-  SELECTION_MODULE_MSD="${ADDITIONALS[MSD]}"
-  SELECTION_MODULE_OEMUNLOCKONBOOT="${ADDITIONALS[OEMUNLOCKONBOOT]}"
-  SELECTION_BOOT_ANIMATION="${ADDITIONALS[BOOT_ANIMATION]}"
-  SELECTION_BOOT_ANIMATION_SHA256="${boot_animation_digest}"
-
-  MODULE_SELECTION_FINGERPRINT="$(selection_variant_fingerprint)"
-
-  if [[ ! "${MODULE_SELECTION_FINGERPRINT}" =~ ^[0-9a-f]{64}$ ]]; then
-    echo "Error: failed to compute the module-selection fingerprint." >&2
-    return 1
-  fi
-  printf '%s\n' "${MODULE_SELECTION_FINGERPRINT}"
-}
-\n'}"
-
-  light_digest="$(python3 src/boot_animation.py digest "${light_path}")" || return 1
-  dark_digest="$(python3 src/boot_animation.py digest "${dark_path}")" || return 1
+  local light_digest dark_digest
+  _resolve_boot_animation_payloads || return 1
+  light_digest="$(python3 src/boot_animation.py digest "${BOOT_ANIMATION_LIGHT_PAYLOAD}")" || return 1
+  dark_digest="$(python3 src/boot_animation.py digest "${BOOT_ANIMATION_DARK_PAYLOAD}")" || return 1
   printf 'light=%s\ndark=%s\n' "${light_digest}" "${dark_digest}" |
     sha256sum | awk '{print $1}'
 }
