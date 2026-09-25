@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import re
 import stat
 import sys
 import tempfile
@@ -43,6 +44,9 @@ class FakeExtFs:
         self.root = root
         self.mkdir_calls: list[tuple[str, int, bool, bool]] = []
         self.open_calls: list[tuple[str, str, int]] = []
+        self.contexts = [
+            (re.compile(r"/product(/.*)?"), "u:object_r:system_file:s0"),
+        ]
 
     @property
     def tree(self) -> Path:
@@ -94,6 +98,21 @@ def test_runtime_payload_installation() -> None:
         for target in expected_targets:
             assert (product.root / target.lstrip("/")).read_bytes() == runtime
 
+        expected_alias_paths = {
+            "/media",
+            "/media/bootanimation.zip",
+            "/media/bootanimation-dark.zip",
+        }
+        alias_labels = {
+            path: next(
+                label
+                for pattern, label in product.contexts
+                if pattern.fullmatch(path)
+            )
+            for path in expected_alias_paths
+        }
+        assert set(alias_labels.values()) == {"u:object_r:system_file:s0"}
+
         # A standalone product.img is mounted at /product. Its filesystem root
         # therefore contains /media, not another nested /product directory.
         assert not (product.root / "product").exists()
@@ -141,6 +160,15 @@ def test_runtime_payload_installation() -> None:
             pass
         else:
             raise AssertionError("missing light and dark payloads were accepted")
+
+        missing_contexts = FakeExtFs(root / "missing-contexts")
+        missing_contexts.contexts = []
+        try:
+            install_runtime_payload({"product": missing_contexts}, runtime)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("missing runtime SELinux context was accepted")
 
         try:
             install_runtime_payload({}, runtime)
