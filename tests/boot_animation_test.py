@@ -82,14 +82,16 @@ def test_runtime_payload_installation() -> None:
         install_runtime_payload({"product": product}, runtime)
 
         expected_targets = [
-            "/product/media/bootanimation.zip",
-            "/product/media/bootanimation-dark.zip",
+            "/media/bootanimation.zip",
+            "/media/bootanimation-dark.zip",
         ]
         assert [call[0] for call in product.open_calls] == expected_targets
         assert all(call[1:] == ("wb", 0o644) for call in product.open_calls)
-        assert all(call[0] == "/product/media" for call in product.mkdir_calls)
+        assert all(call[0] == "/media" for call in product.mkdir_calls)
         for target in expected_targets:
             assert (product.root / target.lstrip("/")).read_bytes() == runtime
+
+        assert not (product.root / "product").exists()
 
         try:
             install_runtime_payload({}, runtime)
