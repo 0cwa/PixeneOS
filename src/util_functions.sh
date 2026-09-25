@@ -666,7 +666,7 @@ function extract_ota_boot_target() {
 function verify_boot_animation_ota() {
   local ota_path="${1}"
   local temp_dir payload_path avbroot_bin afsr_bin ota_abs
-  local partition extract_dir unpack_dir image_path raw_image
+  local extract_dir unpack_dir image_path raw_image
 
   [[ -f "${ota_path}" ]] || {
     echo "Error: missing OTA for boot-animation inspection: ${ota_path}" >&2
@@ -697,48 +697,46 @@ function verify_boot_animation_ota() {
     return 1
   }
 
-  for partition in system product; do
-    extract_dir="${temp_dir}/extract-${partition}"
-    unpack_dir="${temp_dir}/unpack-${partition}"
-    mkdir -p -- "${extract_dir}" "${unpack_dir}" || {
-      rm -rf -- "${temp_dir}"
-      return 1
-    }
+  extract_dir="${temp_dir}/extract-product"
+  unpack_dir="${temp_dir}/unpack-product"
+  mkdir -p -- "${extract_dir}" "${unpack_dir}" || {
+    rm -rf -- "${temp_dir}"
+    return 1
+  }
 
-    if ! "${avbroot_bin}" ota extract       --input "${ota_abs}"       --directory "${extract_dir}"       --partition "${partition}" >/dev/null; then
-      rm -rf -- "${temp_dir}"
-      return 1
-    fi
+  if ! "${avbroot_bin}" ota extract     --input "${ota_abs}"     --directory "${extract_dir}"     --partition product >/dev/null; then
+    rm -rf -- "${temp_dir}"
+    return 1
+  fi
 
-    image_path="${extract_dir}/${partition}.img"
-    [[ -s "${image_path}" ]] || {
-      echo "Error: boot-animation verification did not extract ${partition}.img." >&2
-      rm -rf -- "${temp_dir}"
-      return 1
-    }
-    image_path="$(realpath -- "${image_path}")" || {
-      rm -rf -- "${temp_dir}"
-      return 1
-    }
+  image_path="${extract_dir}/product.img"
+  [[ -s "${image_path}" ]] || {
+    echo "Error: boot-animation verification did not extract product.img." >&2
+    rm -rf -- "${temp_dir}"
+    return 1
+  }
+  image_path="$(realpath -- "${image_path}")" || {
+    rm -rf -- "${temp_dir}"
+    return 1
+  }
 
-    if ! (
-      cd -- "${unpack_dir}" &&
-        "${avbroot_bin}" avb unpack --quiet --input "${image_path}" &&
-        raw_image="$(realpath -- raw.img)" &&
-        "${afsr_bin}" unpack --input "${raw_image}"
-    ); then
-      rm -rf -- "${temp_dir}"
-      return 1
-    fi
-  done
+  if ! (
+    cd -- "${unpack_dir}" &&
+      "${avbroot_bin}" avb unpack --quiet --input "${image_path}" &&
+      raw_image="$(realpath -- raw.img)" &&
+      "${afsr_bin}" unpack --input "${raw_image}"
+  ); then
+    rm -rf -- "${temp_dir}"
+    return 1
+  fi
 
-  if ! python3 src/boot_animation.py verify-runtime     "${payload_path}"     "${temp_dir}/unpack-system/fs_tree/system/bin/bootanimation"     "${temp_dir}/unpack-product/fs_tree/product/media/bootanimation.zip"     "${temp_dir}/unpack-product/fs_tree/product/media/bootanimation-dark.zip"; then
+  if ! python3 src/boot_animation.py verify-runtime     "${payload_path}"     "${unpack_dir}/fs_tree/media/bootanimation.zip"     "${unpack_dir}/fs_tree/media/bootanimation-dark.zip"; then
     rm -rf -- "${temp_dir}"
     return 1
   fi
 
   rm -rf -- "${temp_dir}"
-  echo "Verified effective custom boot animation in finished OTA: ${ota_path}"
+  echo "Verified custom boot animation in finished OTA product image: ${ota_path}"
 }
 
 function verify_requested_boot_animation_outputs() {
