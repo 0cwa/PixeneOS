@@ -31,6 +31,20 @@ def write_valid(path: Path, frame: bytes = b"frame") -> None:
         archive.writestr("part0/frame.png", frame)
 
 
+def write_valid_with_timestamp(
+    path: Path,
+    timestamp: tuple[int, int, int, int, int, int],
+) -> None:
+    with zipfile.ZipFile(path, "w") as archive:
+        for name, data in (
+            ("desc.txt", b"1 1 1\np 1 0 part0\n"),
+            ("part0/frame.png", b"frame"),
+        ):
+            info = zipfile.ZipInfo(name, date_time=timestamp)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            archive.writestr(info, data)
+
+
 def assert_rejected(path: Path, context: str) -> None:
     try:
         validate_payload(path)
@@ -84,6 +98,13 @@ def test_runtime_payload_installation() -> None:
             files = [info for info in archive.infolist() if not info.is_dir()]
             assert files
             assert all(info.compress_type == zipfile.ZIP_STORED for info in files)
+            assert all(info.date_time == (1980, 1, 1, 0, 0, 0) for info in files)
+
+        timestamp_a = root / "timestamp-a.zip"
+        timestamp_b = root / "timestamp-b.zip"
+        write_valid_with_timestamp(timestamp_a, (2020, 1, 2, 3, 4, 6))
+        write_valid_with_timestamp(timestamp_b, (2026, 9, 25, 10, 58, 20))
+        assert build_runtime_payload(timestamp_a) == build_runtime_payload(timestamp_b)
 
         product = FakeExtFs(root / "product-fs")
         install_runtime_payload({"product": product}, runtime)
