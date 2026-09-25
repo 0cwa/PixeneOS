@@ -233,6 +233,46 @@ def build_runtime_payload(path: str | os.PathLike[str]) -> bytes:
     return output.getvalue()
 
 
+def _install_partition_context_aliases(
+    fs: Any,
+    partition: str,
+    raw_targets: Iterable[str],
+) -> None:
+    """Map partition-relative image paths to their runtime SELinux labels."""
+
+    contexts = list(fs.contexts)
+    aliases: list[tuple[re.Pattern[str], str]] = []
+    image_paths: set[PurePosixPath] = set()
+    for raw_target in raw_targets:
+        target = PurePosixPath(raw_target)
+        image_paths.add(target.parent)
+        image_paths.add(target)
+
+    for image_path in sorted(image_paths, key=str):
+        image_path_str = str(image_path)
+        if any(pattern.fullmatch(image_path_str) for pattern, _ in contexts + aliases):
+            continue
+
+        runtime_path = PurePosixPath("/") / partition / image_path.relative_to("/")
+        runtime_path_str = str(runtime_path)
+        try:
+            label = next(
+                label
+                for pattern, label in contexts
+                if pattern.fullmatch(runtime_path_str)
+            )
+        except StopIteration as exc:
+            raise RuntimeError(
+                "no SELinux context maps boot animation runtime path: "
+                f"{runtime_path_str}"
+            ) from exc
+
+        aliases.append((re.compile(re.escape(image_path_str)), label))
+
+    if aliases:
+        fs.contexts = aliases + contexts
+
+
 def install_runtime_payload(
     ext_fs: dict[str, Any],
     light_payload: bytes,
@@ -246,6 +286,17 @@ def install_runtime_payload(
         "/media/bootanimation.zip": light_payload,
         "/media/bootanimation-dark.zip": dark_payload,
     }
+
+    targets_by_partition: dict[str, list[str]] = {}
+    for partition, raw_target in BOOT_ANIMATION_TARGETS:
+        targets_by_partition.setdefault(partition, []).append(raw_target)
+    for partition, raw_targets in targets_by_partition.items():
+        fs = ext_fs.get(partition)
+        if fs is None:
+            raise RuntimeError(
+                f"boot animation target partition is missing: {partition}"
+            )
+        _install_partition_context_aliases(fs, partition, raw_targets)
 
     for partition, raw_target in BOOT_ANIMATION_TARGETS:
         fs = ext_fs.get(partition)
