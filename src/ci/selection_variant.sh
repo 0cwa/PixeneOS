@@ -7,7 +7,7 @@
 # this helper owns the byte-for-byte representation that is hashed by both the
 # build and release preflight paths.
 
-BOOT_ANIMATION_SELECTION_CONTRACT="product-stored-apex-bypass-v3"
+BOOT_ANIMATION_SELECTION_CONTRACT="product-image-root-stored-v4"
 
 function selection_variant_manifest() {
   local field value
