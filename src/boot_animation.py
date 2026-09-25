@@ -29,8 +29,8 @@ MAX_COMPRESSION_RATIO = 200
 MAX_DESCRIPTION_BYTES = 4096
 PAYLOAD_ENVIRONMENT = "PIXENEOS_BOOT_ANIMATION_PATH"
 BOOT_ANIMATION_TARGETS = (
-    ("product", "/product/media/bootanimation.zip"),
-    ("product", "/product/media/bootanimation-dark.zip"),
+    ("product", "/media/bootanimation.zip"),
+    ("product", "/media/bootanimation-dark.zip"),
 )
 
 
